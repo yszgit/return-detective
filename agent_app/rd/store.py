@@ -27,6 +27,11 @@ def reset():
         _save({"cases": {}, "actions": [], "approvals": []})
 
 
+def restore(db):
+    with _lock:
+        _save(db)
+
+
 def snapshot():
     with _lock:
         return _load()

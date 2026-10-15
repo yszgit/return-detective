@@ -14,7 +14,8 @@ from strands.models import BedrockModel
 
 from . import tools
 
-MODEL_ID = os.environ.get("RD_MODEL_ID")  # e.g. us.anthropic.claude-sonnet-4-5-20250929-v1:0 ; None = Strands default
+MODEL_ID = os.environ.get("RD_MODEL_ID")
+FAST_MODEL_ID = os.environ.get("RD_FAST_MODEL_ID")  # optional faster model for Triage and Response
 REGION = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
 GUARDRAIL_ID = os.environ.get("RD_GUARDRAIL_ID")            # optional Bedrock Guardrail
 GUARDRAIL_VERSION = os.environ.get("RD_GUARDRAIL_VERSION", "DRAFT")
@@ -111,17 +112,21 @@ class TraceHook(HookProvider):
             self.emit({"agent": self.agent_name, "type": "thought", "text": text})
 
 
-def _model():
-    kw = {"region_name": REGION, "max_tokens": 16000}
-    if MODEL_ID:
-        kw["model_id"] = MODEL_ID
+def _model(model_id=None):
+    # No temperature by default: newer Claude models on Bedrock (e.g. Opus 5.5) always think and
+    # reject a custom temperature. Set RD_TEMPERATURE only for models that accept it.
+    kw = {"region_name": REGION, "max_tokens": int(os.environ.get("RD_MAX_TOKENS", "16000"))}
+    if os.environ.get("RD_TEMPERATURE"):
+        kw["temperature"] = float(os.environ["RD_TEMPERATURE"])
+    if model_id or MODEL_ID:
+        kw["model_id"] = model_id or MODEL_ID
     if GUARDRAIL_ID:
         kw.update(guardrail_id=GUARDRAIL_ID, guardrail_version=GUARDRAIL_VERSION, guardrail_trace="enabled")
     return BedrockModel(**kw)
 
 
-def make_agent(name, prompt, agent_tools, emit):
-    return Agent(name=name, model=_model(), system_prompt=prompt, tools=agent_tools,
+def make_agent(name, prompt, agent_tools, emit, fast=False):
+    return Agent(name=name, model=_model(FAST_MODEL_ID if fast else None), system_prompt=prompt, tools=agent_tools,
                  hooks=[TraceHook(name, emit)], callback_handler=None)
 
 
@@ -145,7 +150,7 @@ def run_pipeline(return_id, as_of, emit=print):
     tools.AS_OF.set(str(as_of)[:10])
     emit({"agent": "System", "type": "stage", "text": f"New return #{return_id} received on {as_of}"})
 
-    triage = make_agent("Triage Agent", TRIAGE_PROMPT, tools.TRIAGE_TOOLS, emit)
+    triage = make_agent("Triage Agent", TRIAGE_PROMPT, tools.TRIAGE_TOOLS, emit, fast=True)
     t_out = str(triage(f"New return_id {return_id} was just created. Today's date is {as_of}. Triage it."))
     t = extract_json(t_out)
     emit({"agent": "Triage Agent", "type": "decision", "data": t})
@@ -160,7 +165,7 @@ def run_pipeline(return_id, as_of, emit=print):
     emit({"agent": "Investigator Agent", "type": "decision", "data": finding})
 
     emit({"agent": "System", "type": "stage", "text": "Acting on the findings within the playbook"})
-    resp = make_agent("Response Agent", RESPONSE_PROMPT, tools.RESPONSE_TOOLS, emit)
+    resp = make_agent("Response Agent", RESPONSE_PROMPT, tools.RESPONSE_TOOLS, emit, fast=True)
     r_out = str(resp(f"Today is {as_of}. Style '{t['style']}', category '{t['category']}'.\n"
                      f"Investigation result JSON:\n{json.dumps(finding)}\n\nInvestigator narrative:\n{i_out}"))
     emit({"agent": "Response Agent", "type": "briefing", "text": r_out})

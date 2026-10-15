@@ -32,7 +32,22 @@ python run_demo.py fit        # 2024-09-01: Sperry Wellsloafer_wm runs big -> fi
 ```
 Local fallback without AWS data access: put the Parquet files in `data/` and set `RD_BACKEND=duckdb`.
 
-## Key numbers (backtest on 2 years of returns)
-- Agent flags a systemic issue at the **15th** related return (median) vs **~85th** for a monthly report; **59 days** earlier.
+## Key numbers (reproducible: `RD_BACKEND=duckdb python evaluation/backtest.py`)
+- The Triage screen raises **1,391** systemic signals over two years of returns (same thresholds as `rd/detect.py`).
+- On the **142 comparable cases** that a monthly report would also catch, the agent flags at the **14th** related
+  return (median) vs the **84th** for the report: **59 days earlier**.
+- **1,249** signals never reach a monthly-report threshold (too small per month).
+- False-alarm proxy (no ground truth exists): **47%** of raw flags are still present 28 days later (quality: 31%).
+  This is why statistics only open a case: the Investigator assigns confidence and costly actions need High
+  confidence plus human approval.
 - Glindafied: flagged 2024-10-28 at the 5th defect return; a monthly report would flag it 2024-12-31 at the 52nd.
-- 26–41% of online customers returning for quality, wrong item or transit damage were still charged a restocking fee.
+- 26-41% of online customers returning for quality, wrong item or transit damage were still charged a restocking fee.
+
+## Demo UI
+```powershell
+streamlit run app.py
+```
+Opens in the browser. Pick a scenario, choose **Live (Bedrock)** and press Run. Every live run is saved under
+`runtime/traces/`; switch to **Replay saved live run** to show it again instantly during the pitch.
+Optional speed-up: `$env:RD_FAST_MODEL_ID="<faster model id>"` runs Triage and Response on a faster model
+while the Investigator keeps `RD_MODEL_ID`.
