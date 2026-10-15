@@ -1,0 +1,144 @@
+"""No-AWS, no-Bedrock smoke test for the synthetic Return Detective data layer.
+
+It regenerates the synthetic Parquet files into a temp directory, points the DuckDB
+backend at them (RD_BACKEND=duckdb, RD_DATA_DIR=<temp>), and checks:
+
+  1. all four Parquet files exist and load through rd.data with the expected columns;
+  2. the three seeded scenarios reach SIGNAL on the UNCHANGED thresholds in rd/detect.py,
+     and the negative-control style never does;
+  3. the get_return tool exposes no customer identifier and return_ids are unique;
+  4. the human-approval authority gate in the action tools behaves correctly without any LLM.
+
+Run from the agent_app directory:
+    RD_BACKEND=duckdb python -m unittest tests.test_synthetic_pipeline -v
+"""
+import importlib
+import json
+import os
+import sys
+import tempfile
+import unittest
+
+HERE = os.path.dirname(__file__)
+APP = os.path.join(HERE, "..")
+SCRIPTS = os.path.join(APP, "scripts")
+sys.path.insert(0, os.path.abspath(APP))
+sys.path.insert(0, os.path.abspath(SCRIPTS))
+
+AS_OF = "2026-01-31"
+EXPECTED_RETURN_COLS = {
+    "return_id", "banner", "order_number", "sku", "style", "return_order_number", "channel",
+    "return_date", "status", "refund", "qty", "raw_reason", "store", "category",
+    "restocking_fee", "final_sale", "aldo_fault",
+}
+
+
+def _reload_rd():
+    """Re-import rd.* so RD_DATA_DIR / RD_BACKEND take effect for the module-level globals."""
+    for m in [m for m in list(sys.modules) if m == "rd" or m.startswith("rd.")]:
+        del sys.modules[m]
+    data = importlib.import_module("rd.data")
+    detect = importlib.import_module("rd.detect")
+    tools = importlib.import_module("rd.tools")
+    store = importlib.import_module("rd.store")
+    return data, detect, tools, store
+
+
+class SyntheticPipelineTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.data_dir = cls._tmp.name
+        # generate into the temp dir
+        import generate_synthetic_data as gen
+        gen.main(type("A", (), {"out": cls.data_dir}))
+        os.environ["RD_BACKEND"] = "duckdb"
+        os.environ["RD_DATA_DIR"] = cls.data_dir
+        os.environ["RD_RUNTIME_DIR"] = os.path.join(cls.data_dir, "runtime")
+        cls.data, cls.detect, cls.tools, cls.store = _reload_rd()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_parquet_files_exist(self):
+        for name in ("returns", "sku_sales", "exchanges", "baseline"):
+            self.assertTrue(os.path.exists(os.path.join(self.data_dir, f"{name}.parquet")), name)
+        self.assertTrue(os.path.exists(os.path.join(self.data_dir, "_SYNTHETIC.txt")))
+
+    def test_returns_schema_loads(self):
+        row = self.data.one("select * from returns limit 1")
+        self.assertIsNotNone(row)
+        self.assertEqual(EXPECTED_RETURN_COLS, set(row.keys()))
+
+    def test_baseline_matches_returns(self):
+        # baseline.share must equal category_count / total over the actual returns
+        total = self.data.one("select count(*) as n from returns")["n"]
+        for b in self.data.rows("select category, n, share from baseline"):
+            self.assertAlmostEqual(b["share"], b["n"] / total, places=4, msg=b["category"])
+
+    def test_quality_scenario_signals(self):
+        res = {r["category"]: r for r in self.detect.screen_all("SYNTH-RiverLoafer", AS_OF)}
+        self.assertEqual(res["Quality"]["level"], "SIGNAL", res["Quality"])
+
+    def test_fit_scenario_signals(self):
+        res = {r["category"]: r for r in self.detect.screen_all("SYNTH-TrailRunner", AS_OF)}
+        self.assertEqual(res["Fit: too big"]["level"], "SIGNAL", res["Fit: too big"])
+
+    def test_damage_scenario_signals(self):
+        res = {r["category"]: r for r in self.detect.screen_all("SYNTH-CoastalBoot", AS_OF)}
+        self.assertEqual(res["Damaged in transit"]["level"], "SIGNAL", res["Damaged in transit"])
+
+    def test_control_never_signals(self):
+        res = self.detect.screen_all("SYNTH-EverydaySneaker", AS_OF)
+        self.assertEqual([r["category"] for r in res if r["level"] == "SIGNAL"], [])
+
+    def test_isolated_case_not_yet_signal(self):
+        # A single early Quality return should screen below SIGNAL.
+        s = self.detect.screen("SYNTH-RiverLoafer", "Quality", "2026-01-07")
+        self.assertNotEqual(s["level"], "SIGNAL", s)
+
+    def test_get_return_hides_customer_identity(self):
+        self.tools.AS_OF.set(AS_OF)
+        row = json.loads(self.tools.get_return(940))
+        self.assertNotIn("customer_uid", row)
+        self.assertNotIn("error", row)
+
+    def test_return_ids_unique(self):
+        n = self.data.one("select count(*) as n from returns")["n"]
+        d = self.data.one("select count(distinct return_id) as n from returns")["n"]
+        self.assertEqual(n, d)
+
+    def test_approval_gate_refuses_low_confidence(self):
+        self.tools.AS_OF.set(AS_OF)
+        self.store.reset()
+        c = self.store.open_case("SYNTH-RiverLoafer", "Quality", AS_OF, "seeded", "evidence")
+        # No findings recorded yet (confidence is None) -> fee waiver must refuse.
+        out = json.loads(self.tools.waive_restocking_fees(c["case_id"]))
+        self.assertIn("refused", out, out)
+
+    def test_approval_gate_executes_or_requests_when_authorized(self):
+        self.tools.AS_OF.set(AS_OF)
+        self.store.reset()
+        c = self.store.open_case("SYNTH-RiverLoafer", "Quality", AS_OF, "seeded", "evidence")
+        self.store.update_case(c["case_id"], confidence="High", root_cause="defect",
+                               owner_team="Quality & Sourcing")
+        out = json.loads(self.tools.waive_restocking_fees(c["case_id"]))
+        # ALDO-fault + High confidence: either executed within authority or escalated for approval.
+        self.assertTrue(out.get("executed") is True or "approval_requested" in out, out)
+        self.assertNotIn("refused", out)
+
+    def test_high_stakes_actions_require_approval(self):
+        self.tools.AS_OF.set(AS_OF)
+        self.store.reset()
+        c = self.store.open_case("SYNTH-RiverLoafer", "Quality", AS_OF, "seeded", "evidence")
+        self.store.update_case(c["case_id"], confidence="High", root_cause="defect",
+                               owner_team="Quality & Sourcing")
+        hold = json.loads(self.tools.request_stock_hold(c["case_id"], "all DCs"))
+        claim = json.loads(self.tools.draft_supplier_claim(c["case_id"], "claim text"))
+        self.assertIn("approval_requested", hold, hold)
+        self.assertIn("approval_requested", claim, claim)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
