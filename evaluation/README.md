@@ -2,6 +2,8 @@
 
 `backtest.py` uses the thresholds imported from `rd/detect.py`. It compares daily trailing-28-day signals with a month-end report using a minimum of 30 category returns. The retained `results/cases_backtest.csv` is the historical output inherited from `feature/agent`, not a result newly produced during this reorganization.
 
+`results/cases_backtest_from_zip.csv` separately preserves the 1,201-row aggregate result supplied in `return_detective_code.zip`. It has no `sustained_next_28d` column and does not replace the default 1,391-row branch snapshot. See [snapshot provenance](results/README.md) for the exact source, columns and checksum. Neither snapshot is cleaned return-level data.
+
 ## Run on local data
 
 ```sh
