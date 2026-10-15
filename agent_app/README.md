@@ -51,3 +51,36 @@ Opens in the browser. Pick a scenario, choose **Live (Bedrock)** and press Run. 
 `runtime/traces/`; switch to **Replay saved live run** to show it again instantly during the pitch.
 Optional speed-up: `$env:RD_FAST_MODEL_ID="<faster model id>"` runs Triage and Response on a faster model
 while the Investigator keeps `RD_MODEL_ID`.
+
+## Synthetic data (local demo, no AWS)
+
+For a fully local demo there is a deterministic **synthetic** data generator. It writes the
+four Parquet files the tools expect (`returns`, `sku_sales`, `exchanges`, `baseline`) into
+`data/`, labelled SYNTHETIC and containing no customer identifiers. The data is seeded so three
+scenarios cross the **unchanged** detection thresholds in `rd/detect.py`:
+
+| Scenario | Style | Category | Screen |
+| --- | --- | --- | --- |
+| Quality defect | `SYNTH-RiverLoafer` | Quality | SIGNAL |
+| Fit (runs big) | `SYNTH-TrailRunner` | Fit: too big | SIGNAL |
+| Operational / transit damage | `SYNTH-CoastalBoot` | Damaged in transit | SIGNAL |
+| Negative control | `SYNTH-EverydaySneaker` | — | never SIGNAL |
+
+```sh
+cd agent_app
+python scripts/generate_synthetic_data.py                 # writes data/*.parquet (+ _SYNTHETIC.txt)
+RD_BACKEND=duckdb python -m unittest tests.test_synthetic_pipeline -v   # no AWS, no Bedrock
+```
+
+Run the full Triage → Investigator → Response pipeline on the synthetic data (needs
+`RD_MODEL_ID` and AWS credentials for Bedrock; the data layer stays local via DuckDB):
+
+```sh
+RD_BACKEND=duckdb python run_demo.py syn_quality     # Quality defect cluster
+RD_BACKEND=duckdb python run_demo.py syn_fit         # runs-big fit issue
+RD_BACKEND=duckdb python run_demo.py syn_damage      # transit damage
+RD_BACKEND=duckdb python run_demo.py syn_isolated    # single early return, judged isolated
+```
+
+The generator and the unit test need no AWS. The existing real-data scenarios
+(`isolated`, `quality`, `fit`) and the Athena backend are unchanged.

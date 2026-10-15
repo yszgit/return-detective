@@ -19,6 +19,11 @@ SCENARIOS = {
     "isolated": (212632, "2024-10-22"),   # first Glindafied 'Defective' return: not yet a pattern
     "quality": (243470, "2024-11-23"),    # Glindafied: 5 weeks of defects across 12+ locations
     "fit": (165717, "2024-09-01"),        # Sperry Wellsloafer_wm: 80% of returns say 'too big'
+    # --- SYNTHETIC local scenarios (RD_BACKEND=duckdb; see scripts/generate_synthetic_data.py) ---
+    "syn_isolated": (940, "2026-01-07"),  # SYNTH-RiverLoafer: first Quality return, still isolated
+    "syn_quality": (6027, "2026-01-31"),  # SYNTH-RiverLoafer: Quality defect cluster -> SIGNAL
+    "syn_fit": (1068, "2026-01-31"),      # SYNTH-TrailRunner: runs big, 'Fit: too big' -> SIGNAL
+    "syn_damage": (3699, "2026-01-31"),   # SYNTH-CoastalBoot: 'Damaged in transit' -> SIGNAL
 }
 
 COLORS = {"Triage Agent": "\033[36m", "Investigator Agent": "\033[35m", "Response Agent": "\033[33m", "System": "\033[32m"}
