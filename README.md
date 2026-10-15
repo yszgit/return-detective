@@ -1,64 +1,75 @@
 # Return Detective
 
-ALDO / BSRM hackathon team workspace: detect a return pattern, investigate evidence, request approval, act through a retail tool, and verify the result.
+ALDO / BSRM hackathon prototype: **Triage → Investigator → Response**, with Strands agents on Amazon Bedrock, evidence tools, a written playbook and human approval gates.
 
-**Start here:** [Team workflow / 团队协作](docs/TEAM_WORKFLOW.md) · [AWS setup](docs/AWS_SETUP.md) · [Data contracts](docs/DATA_CONTRACTS.md) · [Architecture and delivery status](docs/ARCHITECTURE.md)
+This `agent` branch is organized from `feature/agent` at `f8008f0`. The complete agent implementation now runs from the repository root. The earlier starter is preserved under [`legacy/starter/`](legacy/starter/). See the [migration map](docs/REPOSITORY_STRUCTURE.md).
 
-## Run without AWS
+## Quick start: local demo, no AWS
 
-Python 3.12 is the recommended shared development version. Run from the repository root:
-
-```sh
-python -m return_detective.demo
-python -m unittest discover -s tests -v
-```
-
-These commands use only the Python standard library and synthetic fixtures. The demo is a deterministic starter, **not a live AI investigation**.
-
-## Launch the interface
-
-Windows PowerShell:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m streamlit run app.py
-```
-
-macOS / Linux:
+Use Python 3.12. Run from the repository root:
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m streamlit run app.py
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python scripts/generate_synthetic_data.py
+python run_demo.py syn_quality --scripted
+python -m streamlit run app.py
 ```
 
-The interface starts with local synthetic data and a clearly labeled in-memory inventory simulation. Set your own Workshop credentials, region, and `BEDROCK_MODEL_ID` to use its separate Bedrock investigation button. Live AWS access is not needed for the fixture demo.
+On Windows PowerShell, create the environment with `python -m venv .venv` and activate it with `.\.venv\Scripts\Activate.ps1`; the remaining `python` commands are the same.
 
-## Shared branches
+The generator writes deterministic fake records into ignored `data/synthetic/`. The UI offers synthetic scenarios and defaults to **Scripted (no LLM)** with this dataset. Scripted mode calls real local tools in a fixed sequence; it does not demonstrate autonomous model reasoning. Actions update a local JSON demo store, not a connected retail system.
 
-| Branch | Purpose | Main files |
-| --- | --- | --- |
-| `main` | Stable demo / presentation version | Integrated project |
-| `develop` | Team integration | Reviewed changes from work branches |
-| `feature/data` | Linked data, validation, cohort analysis | `data/`, `return_detective/data.py`, `scripts/` |
-| `feature/agent` | Strands tools, prompts, investigation loop | `return_detective/agent.py`, `prompts/` |
-| `feature/aws` | S3, DynamoDB, Lambda, IAM | `aws/`, `return_detective/check_aws.py` |
-| `feature/frontend` | Streamlit, evidence display, approvals | `app.py` |
-| `feature/evaluation` | Scenarios, baselines, tests, impact assumptions | `tests/`, `evaluation/`, `docs/` |
+```sh
+python run_demo.py syn_isolated --scripted
+python run_demo.py syn_fit --scripted
+python run_demo.py syn_damage --scripted
+```
 
-Work on your branch, open a pull request **into `develop`**, and integrate the verified demo from `develop` into `main`. One person should coordinate changes to shared contracts and dependencies. These are team conventions; remote enforcement depends on the repository's available protection features.
+## Live agents and authorized data
 
-## What's implemented
+Copy `.env.example` to `.env` for non-secret settings. Set your own Workshop AWS credentials in the terminal and choose an enabled `RD_MODEL_ID`. Local DuckDB data can still be used with Bedrock:
 
-- Reproducible synthetic orders, returns, reviews, and inventory.
-- Sales denominators, a 30-day observation window, an as-of date, and an explicit minimum-evidence screen.
-- Local approval / hold / verification simulation with duplicate-execution protection.
-- Streamlit starter interface and optional read-only Strands / Bedrock investigation code.
-- AWS connection checker, task templates, PR template, and offline CI.
+```sh
+python run_demo.py syn_quality
+```
 
-## Team build work
+For the Athena backend and ALDO scenarios (`isolated`, `quality`, `fit`), follow [AWS setup](docs/AWS_SETUP.md). Live runs require your own model access and may incur AWS charges. This branch's offline checks do not establish live AWS connectivity.
 
-Live AWS connectivity must be verified in the competition account. S3 loading, DynamoDB persistence, Lambda execution, authenticated approvals, model evaluation, and production deployment remain team work. No savings, defect root cause, or deployed AWS capability is claimed by the starter.
+## Repository layout
 
-Only synthetic fixtures belong in this repository. Keep temporary AWS credentials, real customer data, and private raw inputs outside Git. Original competition PDFs remain outside this source repository.
+```text
+app.py                     Streamlit entry point
+run_demo.py                CLI entry point, live or --scripted
+rd/                        Agents, tools, detection, data access, local case store
+  config.py                .env loading and repository-relative paths
+  scenarios.py             Shared CLI/UI scenario definitions
+  policy/                  Response playbook and authority matrix
+scripts/                   Synthetic data, private data preparation, AWS check
+tests/                     Current synthetic pipeline and entry-point checks
+evaluation/                Backtest code and documented historical results
+data/README.md             Data policy; generated/private tables are ignored
+docs/                      Architecture, contracts, setup, migration and data decision
+aws/                       Cloud integration status
+legacy/                    Original starter and archived prototype materials
+.github/workflows/ci.yml    Offline checks for agent and team branches
+```
+
+## Verification
+
+```sh
+python -m unittest discover -s tests -v
+python -m compileall -q rd app.py run_demo.py scripts tests evaluation legacy
+cd legacy/starter
+python -m unittest discover -s tests -v
+python -m return_detective.demo
+```
+
+Tests generate temporary synthetic data and do not call AWS or Bedrock. The historical backtest requires the private inputs to reproduce; see [evaluation notes](evaluation/README.md).
+
+## Data decision
+
+Commit **code, schemas, generators, tiny synthetic fixtures and documented aggregate results**. Keep raw ALDO CSVs, customer/order-level extracts, generated Parquet, credentials and runtime traces outside Git. The existing aggregate backtest is retained in this private repository with its provenance and limitations. Sharing it outside the team needs the data owner's permission. Details: [data assessment](docs/DATA_POLICY.md), [data contracts](docs/DATA_CONTRACTS.md).
+
+Further reading: [architecture and limitations](docs/ARCHITECTURE.md) · [team workflow](docs/TEAM_WORKFLOW.md) · [legacy starter](legacy/README.md).

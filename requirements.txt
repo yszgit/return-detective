@@ -1,4 +1,8 @@
-boto3>=1.39.0,<2
 strands-agents>=1,<2
-streamlit>=1.40,<2
+boto3>=1.39,<2
+duckdb>=1,<2
+pandas>=2.2,<4
+numpy>=1.26,<3
+streamlit>=1.49,<2
+altair>=5,<7
 python-dotenv>=1,<2

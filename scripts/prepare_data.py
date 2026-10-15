@@ -4,7 +4,8 @@ Usage:
   python scripts/prepare_data.py --oms OMS.csv --flag Returnable_Flag.csv \
       --fees Restocking_Fees.csv --exchanges Instore_return_exchanges.csv
 
-Writes Parquet files into ./data used by the agent tools and the demo app.
+Writes private Parquet files into data/private, never the synthetic demo directory.
+Set RD_DATA_DIR=data/private to use these files locally.
 """
 import argparse, duckdb, os
 
@@ -62,5 +63,5 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser()
     p.add_argument('--oms', required=True); p.add_argument('--flag', required=True)
     p.add_argument('--fees', required=True); p.add_argument('--exchanges', required=True)
-    p.add_argument('--out', default=os.path.join(os.path.dirname(__file__), '..', 'data'))
+    p.add_argument('--out', default=os.path.join(os.path.dirname(__file__), '..', 'data', 'private'))
     main(p.parse_args())

@@ -1,20 +1,7 @@
-# AWS workstream
+# AWS integration status
 
-Owner branch: `feature/aws`.
+Implemented adapters: Amazon Bedrock/Strands (`rd/agents.py`) and Athena over private S3/Glue tables (`rd/data.py`). Configuration and connection checks: `docs/AWS_SETUP.md`, `scripts/check_aws.py`.
 
-Implement S3 input loading, DynamoDB case/inventory persistence, and the `return-detective-actions` Lambda against the shared contracts. The starter creates no cloud resources and deploys no infrastructure.
+Still needed for production: DynamoDB case/action/approval persistence behind the `rd/store.py` API, authenticated human reviewers, SNS approval notifications, idempotent retail action execution, and durable verification scheduling. No infrastructure is provisioned by this branch. A JSON action log is a simulation rather than proof of a refund, hold or notification.
 
-Suggested action contract:
-
-```json
-{
-  "case_id": "CASE-001",
-  "action_id": "backend-generated-id",
-  "stock_id": "SHOE-001:DC-A:AUG-2026",
-  "quantity": 10
-}
-```
-
-The backend reads an approval from trusted storage and verifies the exact action scope. It must reject unapproved actions, prevent repeat execution, atomically check remaining inventory, and return an operation ID. A separate inventory read verifies execution. Approval identity must come from authenticated application context, never a model-supplied field.
-
-Use a small Lambda handler with the built-in AWS SDK where possible; keep statistical analysis in the data tools. Document resource names and permissions in `docs/AWS_SETUP.md`. Ask the mentor to resolve restricted lab permissions rather than adding credentials to source files.
+The earlier starter's proposed inventory/Lambda contract is preserved in `legacy/starter/aws/README.md`. Reconcile it with the current style/category case model before integration.

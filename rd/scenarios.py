@@ -1,0 +1,25 @@
+"""Shared scenario definitions for both entry points."""
+
+SCENARIOS = {
+    "syn_isolated": dict(return_id=940, as_of="2026-01-07", synthetic=True,
+                         label="Synthetic · Single early return",
+                         blurb="One early Quality return for SYNTH-RiverLoafer; no systemic signal yet."),
+    "syn_quality": dict(return_id=6027, as_of="2026-01-31", synthetic=True,
+                        label="Synthetic · Quality defect",
+                        blurb="SYNTH-RiverLoafer: a seeded Quality cluster across stores and channels."),
+    "syn_fit": dict(return_id=1068, as_of="2026-01-31", synthetic=True,
+                    label="Synthetic · Fit runs big",
+                    blurb="SYNTH-TrailRunner: fit guidance needs investigation rather than a quality hold."),
+    "syn_damage": dict(return_id=3699, as_of="2026-01-31", synthetic=True,
+                       label="Synthetic · Transit damage",
+                       blurb="SYNTH-CoastalBoot: a seeded operational/transit damage cluster."),
+    "isolated": dict(return_id=212632, as_of="2024-10-22", synthetic=False,
+                     label="ALDO · Day 1: single defective return",
+                     blurb="Glindafied: the first defective return is not yet a pattern."),
+    "quality": dict(return_id=243470, as_of="2024-11-23", synthetic=False,
+                    label="ALDO · Glindafied defects spread",
+                    blurb="Glindafied: related returns now come from many stores and channels."),
+    "fit": dict(return_id=165717, as_of="2024-09-01", synthetic=False,
+                label="ALDO · Wellsloafer runs big",
+                blurb="Sperry Wellsloafer_wm: a fit issue has a different owner and response."),
+}

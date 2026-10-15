@@ -1,5 +1,16 @@
 # 团队协作 / Team workflow
 
+## 整理后的 Agent 分支
+
+`agent` 从 `feature/agent` 的 `f8008f0` 建立，完整 Agent 应用已移到仓库根目录。拉取后按根目录 README 安装依赖；不用再进入 `agent_app/`。原始 starter 保存在 `legacy/starter/`。其他团队分支的文件布局可能仍然不同，合并前参考 `docs/REPOSITORY_STRUCTURE.md` 的路径映射。
+
+```sh
+git fetch origin
+git switch --track origin/agent
+```
+
+已有本地 `agent` 分支时直接 `git switch agent`。数据目录、运行记录和凭证不要提交；当前数据说明在 `docs/DATA_POLICY.md`。
+
 ## 第一次加入
 
 仓库 owner 在 Settings → Collaborators 添加队友，队友接受邀请后：

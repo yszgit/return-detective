@@ -1,9 +1,23 @@
-# Evaluation workstream
+# Evaluation
 
-Owner branch: `feature/evaluation`.
+`backtest.py` uses the thresholds imported from `rd/detect.py`. It compares daily trailing-28-day signals with a month-end report using a minimum of 30 category returns. The retained `results/cases_backtest.csv` is the historical output inherited from `feature/agent`, not a result newly produced during this reorganization.
 
-`scenarios.json` contains held-out expectations for fixture checks; do not expose it to the investigator. Add new scenarios beyond the starter and compare fixed alerts against the agent on the same chronological replay. Freeze thresholds before evaluating held-out scenarios.
+## Run on local data
 
-Measure false alarms, missed cases, time to evidence-supported escalation, approval bypass attempts, duplicate action handling, and execution verification. Model calls, cost, and latency require live measurement.
+```sh
+RD_BACKEND=duckdb python evaluation/backtest.py
+```
 
-For business estimates, document each assumption: affected units, excess return risk, per-return incremental loss, holding/inspection cost, and replacement/lost-margin cost. Do not report illustrative annual savings as actual results.
+The default output is ignored `runtime/evaluation/cases_backtest.csv`, so a synthetic run cannot overwrite the checked-in historical result. Select another destination with `--out <path>`. Set `RD_DATA_DIR=data/private` for authorized local ALDO data. Output under `runtime/` remains ignored. Use `RD_BACKTEST_PATH` to select a reviewed result for the real-data UI.
+
+The synthetic generator and `tests/test_synthetic_pipeline.py` verify seeded behavior without a language model. They are not a held-out estimate of false positive rates or business value.
+
+## Limits of historical results
+
+- Private source inputs are not committed; their counts and the inherited headline figures have not been independently reproduced here.
+- Baseline category shares are computed from the full input history; SKU sales have no event dates. The present evaluation is retrospective and can leak future information. Use prior-period/as-of baselines and dated denominators before claiming unbiased early detection.
+- `sustained_next_28d` is a persistence proxy, not verified true/false root-cause labels. Near the end of the dataset the follow-up window can be incomplete.
+- The monthly baseline may flag before the daily screen on some cases. Compare aligned windows and denominators and report negative lead times too.
+- Savings calculations are illustrative gross avoided-return cost assumptions; intervention cost, stock holding, lost margin and uncertainty are not fully modeled.
+
+The original machine-specific analysis is preserved at `legacy/backtest_original.py` for provenance; do not use it as the supported evaluation entry point.

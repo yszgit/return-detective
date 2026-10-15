@@ -10,10 +10,13 @@ and the category share is at least the same lift over the company baseline.
 Also reports a false-alarm proxy (there is no ground truth for 'real problem'): a flag is SUSTAINED
 if, in the 28 days after the flag, the category still has >= 3 returns and >= 2x the company share.
 
-Writes evaluation/cases_backtest.csv and prints the summary used in the pitch.
+Writes runtime/evaluation/cases_backtest.csv by default. Historical checked-in
+results are preserved separately in evaluation/results/.
 """
 import os
 import sys
+import argparse
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -22,12 +25,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 os.environ.setdefault("RD_BACKEND", "duckdb")
 from rd.data import rows  # noqa: E402
 from rd.detect import MIN_COUNT, MIN_LIFT, MIN_Z, WINDOW_DAYS  # noqa: E402
+from rd.config import RUNTIME_DIR  # noqa: E402
 
 REPORT_MIN = 30
-OUT = os.path.join(os.path.dirname(__file__), "cases_backtest.csv")
+OUT = RUNTIME_DIR / "evaluation" / "cases_backtest.csv"
 
 
-def main():
+def main(output_path=OUT):
     base = pd.DataFrame(rows("select category, share from baseline")).set_index("category")["share"]
     d = pd.DataFrame(rows("""select style, category, return_date, count(*) as n from returns
                               where style is not null group by style, category, return_date"""))
@@ -67,7 +71,9 @@ def main():
                             report_date=rep_date.date() if rep_date is not None else None,
                             returns_at_report=int(cs.loc[rep_date]) if rep_date is not None else None))
     df = pd.DataFrame(out)
-    df.to_csv(OUT, index=False)
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(output_path, index=False)
     both = df.dropna(subset=["report_date"]).copy()
     both["lead_days"] = (pd.to_datetime(both.report_date) - pd.to_datetime(both.flag_date)).dt.days
     print(f"signals: {len(df)}  | also caught by monthly report: {len(both)}  | never caught: {df.report_date.isna().sum()}")
@@ -78,4 +84,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out", type=Path, default=OUT)
+    main(parser.parse_args().out)

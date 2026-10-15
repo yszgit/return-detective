@@ -1,30 +1,24 @@
-"""Command-line demo of Return Detective on real ALDO return data.
+"""Command-line demo of Return Detective on synthetic or authorized ALDO data.
 
   python run_demo.py isolated     # Day 1: one 'Defective' return -> judged isolated
   python run_demo.py quality      # Glindafied: emerging quality defect -> case, actions, approvals
   python run_demo.py fit          # Wellsloafer_wm: runs big -> fit-guidance fix, not a quality case
   python run_demo.py --return-id 243470 --as-of 2024-11-23
 
-Environment: RD_BACKEND=athena|duckdb (default athena), RD_MODEL_ID (Bedrock model or inference profile id),
+  python run_demo.py syn_quality --scripted  # fully local, no AWS or model
+
+Environment: RD_BACKEND=athena|duckdb (default duckdb), RD_MODEL_ID (Bedrock model or inference profile id),
 AWS credentials for us-east-1.
 """
 import argparse
+import datetime as dt
 import json
+import os
 import textwrap
 
 from rd import store
-from rd.agents import run_pipeline
-
-SCENARIOS = {
-    "isolated": (212632, "2024-10-22"),   # first Glindafied 'Defective' return: not yet a pattern
-    "quality": (243470, "2024-11-23"),    # Glindafied: 5 weeks of defects across 12+ locations
-    "fit": (165717, "2024-09-01"),        # Sperry Wellsloafer_wm: 80% of returns say 'too big'
-    # --- SYNTHETIC local scenarios (RD_BACKEND=duckdb; see scripts/generate_synthetic_data.py) ---
-    "syn_isolated": (940, "2026-01-07"),  # SYNTH-RiverLoafer: first Quality return, still isolated
-    "syn_quality": (6027, "2026-01-31"),  # SYNTH-RiverLoafer: Quality defect cluster -> SIGNAL
-    "syn_fit": (1068, "2026-01-31"),      # SYNTH-TrailRunner: runs big, 'Fit: too big' -> SIGNAL
-    "syn_damage": (3699, "2026-01-31"),   # SYNTH-CoastalBoot: 'Damaged in transit' -> SIGNAL
-}
+from rd.config import data_available, is_synthetic
+from rd.scenarios import SCENARIOS
 
 COLORS = {"Triage Agent": "\033[36m", "Investigator Agent": "\033[35m", "Response Agent": "\033[33m", "System": "\033[32m"}
 RESET = "\033[0m"
@@ -53,12 +47,35 @@ def main():
     p.add_argument("scenario", nargs="?", choices=list(SCENARIOS))
     p.add_argument("--return-id", type=int)
     p.add_argument("--as-of")
+    p.add_argument("--scripted", action="store_true", help="fixed tool sequence, no AWS/LLM with DuckDB data")
     p.add_argument("--keep-cases", action="store_true", help="do not reset the case store first")
     a = p.parse_args()
-    rid, as_of = (a.return_id, a.as_of) if a.return_id else SCENARIOS[a.scenario or "quality"]
+    if bool(a.return_id) != bool(a.as_of):
+        p.error("--return-id and --as-of must be supplied together")
+    if a.scenario and a.return_id:
+        p.error("choose a named scenario or --return-id/--as-of")
+    if not data_available():
+        p.error("local data is missing; run python scripts/generate_synthetic_data.py first")
+    if a.return_id:
+        rid, as_of = a.return_id, a.as_of
+    else:
+        scenario = SCENARIOS[a.scenario or ("syn_quality" if is_synthetic() else "quality")]
+        if scenario["synthetic"] != is_synthetic():
+            p.error("scenario and dataset do not match; set RD_BACKEND/RD_DATA_DIR for the chosen scenario")
+        rid, as_of = scenario["return_id"], scenario["as_of"]
+    try:
+        dt.date.fromisoformat(as_of)
+    except ValueError:
+        p.error("--as-of must be an ISO date (YYYY-MM-DD)")
+    if a.scripted:
+        from rd.offline import run_scripted as run
+    else:
+        if not os.environ.get("RD_MODEL_ID"):
+            p.error("set RD_MODEL_ID for Bedrock, or use --scripted for the local demo")
+        from rd.agents import run_pipeline as run
     if not a.keep_cases:
         store.reset()
-    run_pipeline(rid, as_of, emit)
+    run(rid, as_of, emit)
     db = store.snapshot()
     print("\n=== Case store ===")
     for c in db["cases"].values():

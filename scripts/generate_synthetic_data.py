@@ -1,6 +1,6 @@
 """Generate SYNTHETIC Return Detective data for the local DuckDB backend.
 
-This writes four Parquet files into ``agent_app/data/`` with the exact schemas the
+This writes four Parquet files into ``data/synthetic/`` with the exact schemas the
 agent tools, the statistical screen and the backtest expect:
 
   returns.parquet, sku_sales.parquet, baseline.parquet, exchanges.parquet
@@ -18,7 +18,7 @@ so that three seeded scenarios cross the UNCHANGED detection thresholds in rd/de
   * SYNTH-EverydaySneaker -> negative control        (never SIGNAL)
 
 Usage:
-  python scripts/generate_synthetic_data.py                 # writes to ../data
+  python scripts/generate_synthetic_data.py                 # writes to data/synthetic
   python scripts/generate_synthetic_data.py --out /tmp/x    # custom output dir
 
 The script prints each watched category's screen level for the seeded styles so you can
@@ -381,5 +381,5 @@ def _verify(out_dir):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "..", "data"))
+    p.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "..", "data", "synthetic"))
     main(p.parse_args())

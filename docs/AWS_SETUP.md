@@ -1,43 +1,42 @@
-# AWS setup / Workshop Studio
+# AWS setup for the current agent app
 
-1. 登录主办方提供的 Workshop Studio，进入比赛账号，记下指定的区域代码。
-2. 在实验室的临时凭证入口复制适用于自己系统的配置命令。临时凭证包含 `AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY` 和 `AWS_SESSION_TOKEN` 三项。
-3. 把命令运行在自己的终端，之后从同一终端启动项目。凭证过期时重新获取三项，不要提交到 Git。
-4. 设置实际可用的区域和模型 ID / inference profile ID。不要使用模型显示名称。
+The local scripted demo needs no AWS. To run live agents, install root `requirements.txt`, set the three temporary Workshop credentials in your own terminal, and choose the actual enabled region/model or inference-profile ID.
 
-PowerShell（交互输入两个非秘密配置项）：
+Credentials belong in your terminal/profile, not Git, `.env.example`, screenshots or documentation. Copy `.env.example` to `.env` for configuration if helpful; `rd/config.py` loads it without replacing terminal values.
 
-```powershell
-$env:AWS_DEFAULT_REGION = Read-Host "Competition region code"
-$env:BEDROCK_MODEL_ID = Read-Host "Enabled model or inference profile ID"
-.\.venv\Scripts\python.exe -m return_detective.check_aws
-.\.venv\Scripts\python.exe -m streamlit run app.py
+## Bedrock with local synthetic data
+
+```sh
+export AWS_REGION=us-east-1
+export RD_MODEL_ID='<enabled-model-or-inference-profile-id>'
+export RD_BACKEND=duckdb
+export RD_DATA_DIR=data/synthetic
+python scripts/generate_synthetic_data.py
+python run_demo.py syn_quality
 ```
 
-也可以把 `.env.example` 复制成 `.env` 后填写非秘密配置项；凭证仍使用实验室终端配置。`.env` 已被 Git 忽略。
+Use the region actually assigned by the workshop. Optional `RD_FAST_MODEL_ID` changes Triage/Response to another enabled model; the Investigator keeps `RD_MODEL_ID`. Guardrails require `RD_GUARDRAIL_ID` and `RD_GUARDRAIL_VERSION`. `RD_TEMPERATURE` is only appropriate if your selected model supports it.
 
-检查器先验证 STS 身份，再执行一次很小的 Bedrock 请求。返回模型回答才证明该配置已连通；本仓库不预设账号、区域、模型、真实资源或访问成功。
+## Athena over authorized private data
 
-## Resources for the AWS owner
+Prepare the four Parquet tables with `scripts/prepare_data.py` into ignored `data/private/`, upload through the team's authorized data process to private S3, and register `returns`, `sku_sales`, `exchanges`, `baseline` in Glue. This repository does not provision those resources.
 
-| Resource | Suggested setting |
-| --- | --- |
-| S3 data bucket | Choose a globally unique private name; store synthetic CSVs and policies |
-| Cases table | `return-detective-cases`; String partition key `case_id`; on-demand billing |
-| Inventory table | `return-detective-inventory`; String partition key `stock_id`; on-demand billing |
-| Actions Lambda | `return-detective-actions`; Python runtime; logs; approval validation and idempotency |
+```sh
+export RD_BACKEND=athena
+export RD_ATHENA_DB=aldo_returns
+export RD_ATHENA_OUTPUT='s3://<your-private-bucket>/athena-results/'
+export RD_ATHENA_WORKGROUP=primary
+python scripts/check_aws.py
+python run_demo.py quality
+python -m streamlit run app.py
+```
 
-开发身份需要调用所选 Bedrock 模型、读取指定 S3 对象、访问案件表和调用指定 Lambda 的权限。Lambda 执行角色另外需要日志和指定表的读写权限。资源创建还需要主办方允许的部署权限；出现拒绝时请 mentor 调整比赛角色。
+In PowerShell use `$env:RD_BACKEND="athena"` (and the same pattern for other fields). Choose your own authorized output bucket; the former account-specific default has been removed. The checker makes read queries and a small Bedrock request, so run it only with authorized data/model access. Expected counts printed by the checker refer to the original private ALDO snapshot, not synthetic data.
 
-后端必须独立校验审批、审批人身份、操作范围和重复执行。库存更新使用条件写入或事务。演示用的 `DemoRetail` 不提供身份认证或多人共享持久化。
+For a real local snapshot, set `RD_BACKEND=duckdb`, `RD_DATA_DIR=data/private`. Named ALDO scenarios refer to the IDs from the original prepared snapshot; use explicit `--return-id ... --as-of YYYY-MM-DD` if your snapshot differs.
 
-## Troubleshooting
+## Access and integration status
 
-| Error | Check |
-| --- | --- |
-| `NoCredentialsError` | Whether all three temporary credential values are set in this terminal |
-| `ExpiredToken` | Refresh temporary credentials from the lab |
-| `AccessDeniedException` | Role permissions, model account access, and any provider activation requirements |
-| `ValidationException` | Region, model ID, supported Converse API, or required inference profile |
+The AWS role needs the selected model invocation permissions, the intended Athena workgroup/Glue database, and read/write access to the relevant private S3 prefixes. Resolve account/role limitations through the workshop administrator. Do not add credentials to source or broaden sharing to work around a permission error.
 
-Official references: [temporary credentials](https://docs.aws.amazon.com/sdkref/latest/guide/feature-static-credentials.html), [model access](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html), [Lambda execution roles](https://docs.aws.amazon.com/lambda/latest/dg/lambda-intro-execution-role.html).
+Case state remains local JSON even with Athena/Bedrock. DynamoDB, SNS, authenticated approval checks, idempotent retail execution and durable follow-up scheduling are not implemented here; see `aws/README.md`.

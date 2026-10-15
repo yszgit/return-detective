@@ -1,27 +1,41 @@
-# Architecture and delivery status
+# Architecture and implementation status
 
 ```mermaid
 flowchart TD
-    UI[Streamlit] --> A[Strands / Bedrock investigation]
-    A --> Q[Read-only evidence tools]
-    Q --> S[Synthetic CSV fixtures; S3 adapter planned]
-    UI --> H[Explicit human approval]
-    H --> R[Local DemoRetail; Lambda adapter planned]
-    R --> I[In-memory inventory; DynamoDB adapter planned]
+    UI[Streamlit app.py] --> Pipeline[Triage → Investigator → Response]
+    CLI[run_demo.py] --> Pipeline
+    CLI --> Scripted[Scripted local tool sequence]
+    Pipeline --> Model[Strands + Amazon Bedrock]
+    Pipeline --> Tools[rd/tools.py + response playbook]
+    Scripted --> Tools
+    Tools --> Data[rd/data.py]
+    Data --> Local[DuckDB over local Parquet]
+    Data --> AWS[Private S3 + Glue + Athena]
+    Tools --> Store[Local JSON cases / actions / approvals]
+    UI --> Human[Demo approval decision]
+    Human --> Store
 ```
 
-The CLI demo is deterministic screening plus a simulated retail action. It is not an autonomous LLM loop. The separate Bedrock button invokes the implemented Strands evidence tools, but must be tested with the team's account and chosen model.
+`rd/agents.py` contains the three agents and their prompts. `rd/detect.py` supplies a statistical screen; it opens an investigation signal rather than proving a root cause. `rd/tools.py` exposes evidence and action tools; the playbook is read from `rd/policy/response_playbook.md`.
 
-The model receives no approval or execution tool in this starter. The interface demonstrates an explicit QA approval before a hold. Production implementation must authenticate the approver in a trusted backend and persist decisions independently of the model.
+The shared configuration and scenarios now live in `rd/config.py` and `rd/scenarios.py`. Runtime state defaults to ignored `runtime/`, and local data to ignored `data/synthetic/`. Root `.env` supplies optional non-secret configuration without overriding terminal values.
 
-An inventory read verifies that a hold executed; it does not prove future returns fell. A SKU/DC/shipping-cohort association is evidence for investigation, not confirmation that a supplier or factory caused the problem.
+## Verified locally
 
-## Build gates
+- Deterministic synthetic generation, four-table loading and expected quality/fit/transit signals.
+- An isolated return and negative control stay below systemic signal thresholds.
+- Tool authority checks and human approval requests run without AWS.
+- The CLI offers `--scripted`; the UI identifies this mode as having no LLM.
+- The early starter's simulation and tests remain runnable in `legacy/starter/`.
 
-- Data: joins, quantities, observation windows, and missing cohort mapping are validated.
-- Agent: real tools are called, competing hypotheses are considered, missing evidence leads to another query or escalation, and claims cite sources.
-- AWS: approvals and idempotency are enforced by the backend; failures remain visible.
-- Experience: evidence, actions, status, and verification are understandable without revealing hidden model reasoning.
-- Evaluation: normal and insufficient-evidence cases stop safely; the fixed-alert baseline sees the same information at each replay time.
+## Prototype boundaries
 
-Business impact estimates must distinguish assumptions, simulated comparisons, and observed results. Holding costs, inspection, replacement fulfillment, and any lost contribution margin must be considered before claiming net savings.
+- Live Bedrock and Athena adapters exist; this reorganization does not verify account access or model behavior.
+- All action tools record demo actions/requests in JSON. No real refund, stock hold, supplier message, customer outreach or timed follow-up is executed.
+- DynamoDB, SNS and live retail adapters are future work. Approval identity is not authenticated; a local JSON lock is not a multi-process database.
+- The replay date and data cache are process-global. Isolate runs; concurrent production users need request-scoped state.
+- Baselines/sales totals are static across replay dates, and the single-return lookup lacks a date bound. Historical evaluation is retrospective; full point-in-time guarantees are not claimed.
+- The optional Bedrock Guardrail is active only when configured. Tool outputs omit customer identifiers but can retain private business IDs.
+- Statistics suggest hypotheses; they cannot establish a supplier/production-lot cause without those source fields. Business impact sliders are assumptions, not realized savings.
+
+The reorganization preserves the existing thresholds and authority rules. It does not turn these demo boundaries into production capabilities.

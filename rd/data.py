@@ -1,8 +1,8 @@
 """Data access layer.
 
 Two interchangeable backends, chosen with the RD_BACKEND environment variable:
-  * athena  (default on AWS) - queries the Glue/Athena tables in database `aldo_returns`
-  * duckdb  (local fallback) - queries the Parquet files in ./data
+  * athena - queries the configured Glue/Athena database
+  * duckdb (default) - queries local Parquet files in data/synthetic
 
 All SQL in the tools is written to run unchanged on both engines (Trino and DuckDB):
 date bounds are computed in Python and passed as DATE literals, and every value is
@@ -13,12 +13,12 @@ import os
 import threading
 import time
 
-BACKEND = os.environ.get("RD_BACKEND", "athena").lower()
+from .config import BACKEND, DATA_DIR
+
 ATHENA_DB = os.environ.get("RD_ATHENA_DB", "aldo_returns")
-ATHENA_OUTPUT = os.environ.get("RD_ATHENA_OUTPUT", "s3://aldo-return-detective-9969/athena-results/")
+ATHENA_OUTPUT = os.environ.get("RD_ATHENA_OUTPUT", "")
 ATHENA_WORKGROUP = os.environ.get("RD_ATHENA_WORKGROUP", "primary")
 REGION = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
-DATA_DIR = os.environ.get("RD_DATA_DIR", os.path.join(os.path.dirname(__file__), "..", "data"))
 
 TABLES = ("returns", "sku_sales", "exchanges", "baseline")
 _local = threading.local()
@@ -68,6 +68,12 @@ def _duck():
         import duckdb
         c = duckdb.connect()
         for t in TABLES:
+            if not (DATA_DIR / f"{t}.parquet").is_file():
+                c.close()
+                raise FileNotFoundError(
+                    f"Missing {DATA_DIR / (t + '.parquet')}. "
+                    "Run python scripts/generate_synthetic_data.py or set RD_DATA_DIR to your prepared data."
+                )
             p = os.path.join(DATA_DIR, f"{t}.parquet").replace("'", "''")
             c.execute(f"create view {t} as select * from read_parquet('{p}')")
         _local.duck = c
@@ -103,6 +109,8 @@ def _convert(value, typ):
 
 
 def _rows_athena(sql):
+    if not ATHENA_OUTPUT:
+        raise ValueError("Set RD_ATHENA_OUTPUT to your private S3 Athena results prefix.")
     cli = _athena()
     qid = cli.start_query_execution(
         QueryString=sql,

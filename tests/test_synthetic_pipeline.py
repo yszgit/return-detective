@@ -9,12 +9,13 @@ backend at them (RD_BACKEND=duckdb, RD_DATA_DIR=<temp>), and checks:
   3. the get_return tool exposes no customer identifier and return_ids are unique;
   4. the human-approval authority gate in the action tools behaves correctly without any LLM.
 
-Run from the agent_app directory:
+Run from the repository root:
     RD_BACKEND=duckdb python -m unittest tests.test_synthetic_pipeline -v
 """
 import importlib
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -138,6 +139,52 @@ class SyntheticPipelineTest(unittest.TestCase):
         claim = json.loads(self.tools.draft_supplier_claim(c["case_id"], "claim text"))
         self.assertIn("approval_requested", hold, hold)
         self.assertIn("approval_requested", claim, claim)
+
+    def test_cli_runs_after_relocation_from_another_directory(self):
+        result = subprocess.run(
+            [sys.executable, os.path.join(APP, "run_demo.py"), "syn_quality", "--scripted"],
+            cwd=self.data_dir, capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('"decision": "INVESTIGATE"', result.stdout)
+        self.assertIn("APPROVAL", result.stdout)
+
+    def test_backtest_keeps_generated_results_out_of_historical_file(self):
+        from pathlib import Path
+        historical = Path(APP, "evaluation", "results", "cases_backtest.csv")
+        original = historical.read_bytes()
+        result = subprocess.run(
+            [sys.executable, os.path.join(APP, "evaluation", "backtest.py")],
+            cwd=self.data_dir, capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(Path(self.data_dir, "runtime", "evaluation", "cases_backtest.csv").is_file())
+        self.assertEqual(historical.read_bytes(), original)
+
+    def test_ui_handles_missing_data_and_scripted_synthetic_run(self):
+        code = '''
+import os
+from streamlit.testing.v1 import AppTest
+app = AppTest.from_file(os.environ["RD_TEST_APP"]).run(timeout=30)
+assert not app.exception, [e.message for e in app.exception]
+if os.environ["RD_TEST_MISSING"] == "1":
+    assert next(b for b in app.button if b.label == "▶ Run").disabled
+else:
+    next(r for r in app.radio if r.label == "Incoming return").set_value("Synthetic · Quality defect").run()
+    next(b for b in app.button if b.label == "▶ Run").click().run(timeout=30)
+    assert not app.exception, [e.message for e in app.exception]
+    assert any("Triage decision: INVESTIGATE" in message.value for message in app.error)
+    assert any("Waiting for a human decision" in message.value for message in app.markdown)
+'''
+        for missing in (True, False):
+            with self.subTest(missing_data=missing):
+                env = dict(os.environ, RD_TEST_APP=os.path.abspath(os.path.join(APP, "app.py")),
+                           RD_TEST_MISSING="1" if missing else "0",
+                           RD_DATA_DIR=os.path.join(self.data_dir, "missing") if missing else self.data_dir,
+                           RD_RUNTIME_DIR=os.path.join(self.data_dir, "ui-runtime"))
+                result = subprocess.run([sys.executable, "-c", code], env=env,
+                                        capture_output=True, text=True, timeout=90)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

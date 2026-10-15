@@ -1,8 +1,8 @@
 """Case files, action log and the human-approval queue (a JSON file, good enough for a demo).
 In production this would be DynamoDB."""
 import json, os, threading, uuid, datetime
+from .config import RUNTIME_DIR
 
-RUNTIME_DIR = os.environ.get("RD_RUNTIME_DIR", os.path.join(os.path.dirname(__file__), "..", "runtime"))
 _PATH = os.path.join(RUNTIME_DIR, "cases.json")
 _lock = threading.Lock()
 

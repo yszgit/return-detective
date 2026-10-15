@@ -14,6 +14,15 @@ credentials
 tmp/
 data/raw/
 data/private/
+# Generated data and local state never belong in source control.
+data/synthetic/
+data/**/*.csv
+data/**/*.json
+*.parquet
+*.duckdb
+*.duckdb.wal
+runtime/
+.ruff_cache/
 .DS_Store
 Thumbs.db
 .idea/
