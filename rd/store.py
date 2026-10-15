@@ -130,7 +130,8 @@ def decide_approval(approval_id, approve, decided_by="human reviewer"):
                 if c:
                     c["history"].append({"at": r["decided_at"], "event": f"{r['status']} by {decided_by}: {r['action']}"})
                     if not any(x["status"] == "PENDING" for x in db["approvals"] if x["case_id"] == r["case_id"]):
-                        c["status"] = "ACTIONED"
+                        mine = [x["status"] for x in db["approvals"] if x["case_id"] == r["case_id"]]
+                        c["status"] = "ACTIONED" if "APPROVED" in mine else "DECLINED"
                 if approve:
                     db["actions"].append({"action_id": "ACT-" + uuid.uuid4().hex[:6].upper(), "case_id": r["case_id"],
                                           "tier": r["tier"], "action": r["action"], "detail": r["detail"],

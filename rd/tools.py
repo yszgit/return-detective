@@ -263,16 +263,24 @@ def waive_restocking_fees(case_id: str) -> str:
                    'executed':False,'data_status':'missing_financial_authorization_evidence'})
     f = rows(f"""select return_id, restocking_fee from returns where style = {lit(c['style'])} and category = {lit(c['category'])}
                  and restocking_fee > 0 and return_date <= {dlit(_asof())}""")
+    already_ids = set(int(i) for i in c.get("waived_return_ids") or [])
+    already_waived = float(c.get("fees_waived_cad") or 0)
+    f = [x for x in f if int(x["return_id"]) not in already_ids]
+    if not f:
+        return _j({"executed": False, "already_waived": True,
+                   "message": f"All fee-charged returns for this case are already waived (CA${already_waived:.2f} so far). Nothing new to waive."})
     total = round(sum(x["restocking_fee"] for x in f), 2)
     detail = {"returns_refunded": len(f), "amount_cad": total, "return_ids": [x["return_id"] for x in f][:50],
               "future_returns": "fee-free for this style and category while the case is open"}
     store.link_returns(case_id, [x["return_id"] for x in f])
-    if total <= FEE_AUTHORITY_CAD:
+    if already_waived + total <= FEE_AUTHORITY_CAD:
         a = store.log_action(case_id, 2, "Waive restocking fees", detail)
+        store.update_case(case_id, fees_waived_cad=round(already_waived + total, 2),
+                          waived_return_ids=sorted(already_ids | set(int(x["return_id"]) for x in f)))
         return _j({"executed": True, "within_authority": True, **detail, "action_id": a["action_id"]})
     r = store.request_approval(case_id, 2, "Waive restocking fees", detail, "Customer Care lead")
     return _j({"executed": False, "approval_requested": r["approval_id"],
-               "reason": f"CA${total} exceeds the agent's CA${FEE_AUTHORITY_CAD:.0f} authority", **detail})
+               "reason": f"CA${already_waived + total:.2f} (CA${already_waived:.2f} already waived + CA${total:.2f}) exceeds the agent's CA${FEE_AUTHORITY_CAD:.0f} authority", **detail})
 
 
 @tool
