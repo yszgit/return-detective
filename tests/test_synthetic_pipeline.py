@@ -168,12 +168,14 @@ from streamlit.testing.v1 import AppTest
 app = AppTest.from_file(os.environ["RD_TEST_APP"]).run(timeout=30)
 assert not app.exception, [e.message for e in app.exception]
 if os.environ["RD_TEST_MISSING"] == "1":
-    assert next(b for b in app.button if b.label == "▶ Run").disabled
+    assert next(b for b in app.button if b.label == "Run").disabled
 else:
     next(r for r in app.radio if r.label == "Incoming return").set_value("Synthetic · Quality defect").run()
-    next(b for b in app.button if b.label == "▶ Run").click().run(timeout=30)
+    next(b for b in app.button if b.label == "Run").click().run(timeout=30)
     assert not app.exception, [e.message for e in app.exception]
-    assert any("Triage decision: INVESTIGATE" in message.value for message in app.error)
+    assert any(event.get("agent") == "Triage Agent" and event.get("type") == "decision"
+               and event.get("data", {}).get("decision") == "INVESTIGATE"
+               for event in app.session_state["events"])
     assert any("Waiting for a human decision" in message.value for message in app.markdown)
 '''
         for missing in (True, False):

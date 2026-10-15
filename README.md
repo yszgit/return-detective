@@ -70,6 +70,16 @@ legacy/                    Original starter and archived prototype materials
 .github/workflows/ci.yml    Offline checks for agent and team branches
 ```
 
+## Demo interface and model routing
+
+The interface uses a monochrome layout with numbered agent stages, styled case/approval cards and business-impact charts. The sidebar shows the selected data backend and each model assignment.
+
+- RD_MODEL_ID selects the Investigator model.
+- RD_FAST_MODEL_ID optionally selects another model for Triage and Response. If unset, they use RD_MODEL_ID too.
+- The current pipeline starts Triage for the selected return; the statistical screen is a tool called within that stage. Automatic model-free filtering before Triage is future work.
+- An agent may make several model requests while using tools. Historical signal counts are not measured daily model-call counts or costs.
+- Cases, actions and approvals remain local demo records. UI changes do not deploy DynamoDB, SNS or real retail execution.
+
 ## Verification
 
 ```sh
