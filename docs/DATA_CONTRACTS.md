@@ -1,20 +1,31 @@
-# Shared data and tool contracts
+# Data and tool contracts
 
-All committed records are synthetic. Order quantities are one in the initial fixtures. Times are ISO dates in a single documented simulation calendar; the sample snapshot is 2026-10-15.
+`rd/` is the shared package; the original synthetic order-cohort example is isolated under `examples/legacy_demo/`.
 
-| CSV | Key | Fields used by starter |
+| Table | Meaning | Replay use |
 | --- | --- | --- |
-| orders.csv | order_line_id | order_id, sku, size, dc, cohort_id, delivered_date, quantity |
-| returns.csv | return_id | order_line_id, sku, return_date, quantity, reason, comment |
-| reviews.csv | review_id | sku, review_date, rating, text |
-| inventory.csv | stock_id | sku, dc, cohort_id, available, held |
+| returns | supplied return item records, keyed by return_id | observed return_date <= as_of |
+| sku_sales | static SKU sales aggregate, no dated cohort | no sales-cohort rate computed |
+| exchanges | supplied exchange records | available for future bounded tools |
+| baseline | original full-period artifact | not used as historical baseline |
 
-Returns link to **order lines**, not just order IDs. Inventory includes a synthetic cohort mapping so an operation can target its actual stock group. This extra mapping does not establish a manufacturing defect.
+Screening measures category share **among returns**, not a sales-cohort return rate. Company comparisons use returns observed by the replay date.
 
-`cohort_rates(sku, as_of)` returns a list with `dc`, `cohort_id`, `sold_units`, `returned_units`, `rate`, and `observation_days`. It uses delivered orders with a complete 30-day follow-up and returns observed within that follow-up and by `as_of`. Numerator and denominator refer to the same order lines.
+`get_return` and `sample_returns` use explicit evidence columns and exclude customer_uid.
 
-`screen(sku, as_of)` returns `possible_pattern`, `monitor`, or `insufficient_evidence`, plus the exact cohort summaries. The starter thresholds (30 units, 3 returns, 10%, 2x peer rate) are illustrative and require evaluation.
+## Interfaces
 
-Review and return queries must exclude events after the as-of time. Every claim should cite record IDs or cohort fields. No table contains customer PII. Ground-truth labels belong under `evaluation/` and must not be passed to the investigator.
+- `rows(sql)` / `one(sql)` share SQL across engines; internal values use `lit` and `dlit`.
+- `baseline_share(category, as_of)` requires an explicit date.
+- `screen(style, category, as_of)` and `screen_all(style, as_of)` return statistical evidence.
+- Public Agent tools live in `rd/tools.py`. Use `tools.replay_context(as_of)` around direct tool calls.
+- `run_pipeline(return_id, as_of, emit)` runs Bedrock; `preview_return(return_id, as_of)` only previews evidence.
+- `decide_approval(approval_id, approve, decided_by)` records a local simulation decision.
 
-Change this contract with agreement from the data, agent, AWS, and interface owners before changing shared field names.
+Fees are deduplicated per return order. Mixed-item fee attribution remains uncertain; values are candidate amounts for review. `fee_audit` n/charged count return orders, not unique people. `sku_return_rate` returns null for rates and denominators.
+
+Action records have `status=SIMULATED` and `executed=false`. Future cloud executors must provide authenticated approval, idempotent attempts and verified receipts.
+
+Historical CSV metrics used a full-period baseline and assumed monthly comparator. Recompute before reporting current performance. `after_flag` is later observed volume, not avoided returns or savings.
+
+Coordinate shared-interface changes across data, Agent, AWS and UI owners.

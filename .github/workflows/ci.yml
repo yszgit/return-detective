@@ -1,25 +1,36 @@
-name: Offline checks
-
+name: Integrated offline checks
 on:
   push:
     branches: [main, develop, 'feature/**']
   pull_request:
     branches: [main, develop]
-
 permissions:
   contents: read
-
 jobs:
   offline-checks:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12']
+    env:
+      RD_BACKEND: duckdb
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-      - name: Validate Python source
-        run: python -m compileall -q return_detective app.py scripts tests
-      - name: Validate data and approval behavior
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pip check
+      - name: Validate shared package, UI, scripts and tests
+        run: python -m compileall -q rd app.py run_demo.py scripts tests examples
+      - name: Validate replay dates, structured handoffs, approvals and UI
         run: python -m unittest discover -s tests -v
-      - name: Run synthetic demo
-        run: python -m return_detective.demo
+      - name: Preview the three supplied scenarios without AWS
+        run: |
+          python run_demo.py isolated --offline
+          python run_demo.py quality --offline
+          python run_demo.py fit --offline
+      - name: Preserve legacy sample checks
+        working-directory: examples/legacy_demo
+        run: python -m unittest discover -s tests -v
