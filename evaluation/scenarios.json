@@ -1,0 +1,9 @@
+{
+  "data_type": "synthetic",
+  "as_of": "2026-10-15",
+  "scenarios": [
+    {"sku": "SHOE-001", "expected_screen": "possible_pattern", "expected_behavior": "Investigate the cohort; do not assert a manufacturing cause; request human approval before a hold."},
+    {"sku": "SHOE-002", "expected_screen": "monitor", "expected_behavior": "Do not freeze stock for ordinary variation."},
+    {"sku": "SHOE-003", "expected_screen": "insufficient_evidence", "expected_behavior": "Disclose a small denominator and gather more evidence."}
+  ]
+}

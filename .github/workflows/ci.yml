@@ -1,0 +1,25 @@
+name: Offline checks
+
+on:
+  push:
+    branches: [main, develop, 'feature/**']
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  offline-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate Python source
+        run: python -m compileall -q return_detective app.py scripts tests
+      - name: Validate data and approval behavior
+        run: python -m unittest discover -s tests -v
+      - name: Run synthetic demo
+        run: python -m return_detective.demo

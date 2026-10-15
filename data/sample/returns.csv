@@ -1,0 +1,33 @@
+return_id,order_line_id,sku,return_date,quantity,reason,comment
+RET-SHOE-001-DC-A-001,SHOE-001-DC-A-001,SHOE-001,2026-09-01,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-002,SHOE-001-DC-A-002,SHOE-001,2026-09-02,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-003,SHOE-001-DC-A-003,SHOE-001,2026-09-03,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-004,SHOE-001-DC-A-004,SHOE-001,2026-09-04,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-005,SHOE-001-DC-A-005,SHOE-001,2026-09-05,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-006,SHOE-001-DC-A-006,SHOE-001,2026-09-06,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-007,SHOE-001-DC-A-007,SHOE-001,2026-09-07,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-008,SHOE-001-DC-A-008,SHOE-001,2026-09-08,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-009,SHOE-001-DC-A-009,SHOE-001,2026-09-01,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-010,SHOE-001-DC-A-010,SHOE-001,2026-09-02,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-011,SHOE-001-DC-A-011,SHOE-001,2026-09-03,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-012,SHOE-001-DC-A-012,SHOE-001,2026-09-04,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-013,SHOE-001-DC-A-013,SHOE-001,2026-09-05,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-014,SHOE-001-DC-A-014,SHOE-001,2026-09-06,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-015,SHOE-001-DC-A-015,SHOE-001,2026-09-07,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-016,SHOE-001-DC-A-016,SHOE-001,2026-09-08,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-017,SHOE-001-DC-A-017,SHOE-001,2026-09-01,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-A-018,SHOE-001-DC-A-018,SHOE-001,2026-09-02,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-B-001,SHOE-001-DC-B-001,SHOE-001,2026-09-01,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-B-002,SHOE-001-DC-B-002,SHOE-001,2026-09-02,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-B-003,SHOE-001-DC-B-003,SHOE-001,2026-09-03,1,quality,Sole separating after two wears
+RET-SHOE-001-DC-B-004,SHOE-001-DC-B-004,SHOE-001,2026-09-04,1,quality,Sole separating after two wears
+RET-SHOE-002-DC-A-001,SHOE-002-DC-A-001,SHOE-002,2026-09-01,1,change_of_mind,Changed my mind
+RET-SHOE-002-DC-A-002,SHOE-002-DC-A-002,SHOE-002,2026-09-02,1,change_of_mind,Changed my mind
+RET-SHOE-002-DC-A-003,SHOE-002-DC-A-003,SHOE-002,2026-09-03,1,change_of_mind,Changed my mind
+RET-SHOE-002-DC-A-004,SHOE-002-DC-A-004,SHOE-002,2026-09-04,1,change_of_mind,Changed my mind
+RET-SHOE-002-DC-A-005,SHOE-002-DC-A-005,SHOE-002,2026-09-05,1,change_of_mind,Changed my mind
+RET-SHOE-002-DC-B-001,SHOE-002-DC-B-001,SHOE-002,2026-09-01,1,change_of_mind,Changed my mind
+RET-SHOE-002-DC-B-002,SHOE-002-DC-B-002,SHOE-002,2026-09-02,1,change_of_mind,Changed my mind
+RET-SHOE-002-DC-B-003,SHOE-002-DC-B-003,SHOE-002,2026-09-03,1,change_of_mind,Changed my mind
+RET-SHOE-002-DC-B-004,SHOE-002-DC-B-004,SHOE-002,2026-09-04,1,change_of_mind,Changed my mind
+RET-SHOE-003-DC-A-001,SHOE-003-DC-A-001,SHOE-003,2026-09-01,1,quality,Sole separating after two wears

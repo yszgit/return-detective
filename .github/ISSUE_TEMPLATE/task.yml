@@ -1,0 +1,27 @@
+name: Team task
+description: Define one reviewable hackathon work item
+title: '[Workstream] '
+body:
+  - type: dropdown
+    id: workstream
+    attributes:
+      label: Workstream
+      options:
+        - Data
+        - Agent
+        - AWS
+        - Frontend
+        - Evaluation / Business
+    validations:
+      required: true
+  - type: textarea
+    id: deliverable
+    attributes:
+      label: Deliverable and acceptance check
+      description: Describe the result, shared contracts, and how a teammate can verify it.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies or blockers
