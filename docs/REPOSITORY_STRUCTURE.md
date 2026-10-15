@@ -50,3 +50,7 @@ The former `rd/agents.py` is now the `rd/agents/` package:
 | `__init__.py` | Existing public import compatibility |
 
 Existing CLI, UI and AWS checker imports continue to work. All three prompts, role tool lists and model-selection rules are preserved. Result parsing now keeps complete nested investigation JSON rather than accidentally extracting an inner hypothesis object. The agents still run in one application process; separate deployment is not part of this change.
+
+## Complete official data v2
+
+The subsequent v2 release supersedes the old four-table data assumptions. It adds `scripts/prepare_official_data.py`, `scripts/validate_official_data.py`, `scripts/export_aws_dataset.py`, nine complete analytical tables, monthly transaction shards and `evaluation/chronological.py`. Current evidence tools use dated history, expose exchange/transaction context and withhold undated financial/status outcomes from historical decisions. [Current contracts](DATA_CONTRACTS.md) and [v2 handoff](OFFICIAL_DATA_V2.md) are authoritative; the original four-table contract is archived as `DATA_CONTRACTS_V1.md`.

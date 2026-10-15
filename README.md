@@ -37,7 +37,7 @@ python run_demo.py syn_quality
 
 For the Athena backend and ALDO scenarios (`isolated`, `quality`, `fit`), follow [AWS setup](docs/AWS_SETUP.md). Live runs require your own model access and may incur AWS charges. This branch's offline checks do not establish live AWS connectivity.
 
-The supplied cleaned ALDO snapshot is now included under [`data/cleaned/`](data/cleaned/README.md), with customer identifiers removed and order numbers tokenized. To run the real-data snapshot locally without AWS:
+The complete official **v2** snapshot is included under [`data/cleaned/`](data/cleaned/README.md): all six business CSVs, nine analytical tables, 649,745 return rows and 8,701,520 transaction rows. Customer identifiers are removed and business keys are consistently tokenized. Transaction-level fees, dated orders, quality flags and prior-day history replace the earlier four-table assumptions. To run it locally without AWS:
 
 ```sh
 python scripts/validate_cleaned_data.py
@@ -46,6 +46,8 @@ RD_BACKEND=duckdb RD_DATA_DIR=data/cleaned python -m streamlit run app.py
 ```
 
 See the snapshot README for PowerShell settings and provenance. The application continues to default to synthetic data unless `RD_DATA_DIR` is set explicitly.
+
+[V2 build, acceptance and AWS upload guide](docs/OFFICIAL_DATA_V2.md) · [Data contracts](docs/DATA_CONTRACTS.md). The checked-in 2025 v2 replay uses prior-day baselines and eligible arrivals: 889 signals and a 55.46% persistence proxy, not model accuracy. Missing currency/policy facts, population sales coverage and truth labels remain unavailable.
 
 ## Repository layout
 
@@ -90,10 +92,10 @@ python -m unittest discover -s tests -v
 python -m return_detective.demo
 ```
 
-Tests generate temporary synthetic data and do not call AWS or Bedrock. The historical backtest requires the private inputs to reproduce; see [evaluation notes](evaluation/README.md).
+Tests generate temporary synthetic and official-schema fixtures without AWS/Bedrock. V2 fee grain, unknowns, IDs, time cutoffs, AWS layout and chronological follow-up have regression coverage. The committed snapshot reproduces the v2 rule replay; see [evaluation notes](evaluation/README.md).
 
 ## Data decision
 
-Commit **code, schemas, generators, tiny synthetic fixtures and documented aggregate results**. At the user's request, this private branch also includes the explicitly selected, pseudonymized prepared snapshot in `data/cleaned/`. Raw customer identifiers, original order numbers, raw inputs, other generated Parquet, credentials and runtime traces stay outside Git. Sharing commercial data outside the team needs the data owner's permission. Details: [data assessment](docs/DATA_POLICY.md), [data contracts](docs/DATA_CONTRACTS.md).
+At the user's explicit request, this private branch includes the complete pseudonymized official v2 snapshot, cleaning/validation code, manifest and aggregate replay results. Raw customer identifiers, original business numbers, raw CSVs, HMAC keys, credentials and runtime traces stay outside Git. Details: [data assessment](docs/DATA_POLICY.md), [data contracts](docs/DATA_CONTRACTS.md).
 
 Further reading: [architecture and limitations](docs/ARCHITECTURE.md) · [team workflow](docs/TEAM_WORKFLOW.md) · [legacy starter](legacy/README.md).

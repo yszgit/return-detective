@@ -9,11 +9,12 @@ date bounds are computed in Python and passed as DATE literals, and every value 
 inlined through `lit()`, which escapes quotes.
 """
 import datetime as dt
+from decimal import Decimal
 import os
 import threading
 import time
 
-from .config import BACKEND, DATA_DIR
+from .config import BACKEND, DATA_DIR, DATASET_VERSION
 
 ATHENA_DB = os.environ.get("RD_ATHENA_DB", "aldo_returns")
 ATHENA_OUTPUT = os.environ.get("RD_ATHENA_OUTPUT", "")
@@ -21,6 +22,10 @@ ATHENA_WORKGROUP = os.environ.get("RD_ATHENA_WORKGROUP", "primary")
 REGION = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
 
 TABLES = ("returns", "sku_sales", "exchanges", "baseline")
+EXTRA_TABLES = ("return_fees", "item_flags", "order_lines", "transactions", "company_daily")
+
+
+CURATED = DATASET_VERSION == '2'
 _local = threading.local()
 _cache = {}
 
@@ -54,8 +59,8 @@ def days_before(d, n):
 def _clean(v):
     if hasattr(v, "isoformat"):
         return v.isoformat()
-    if isinstance(v, float):
-        return round(v, 4)
+    if isinstance(v, (float, Decimal)):
+        return round(float(v), 4)
     if hasattr(v, "item"):  # numpy scalars
         return _clean(v.item())
     return v
@@ -67,15 +72,18 @@ def _duck():
     if c is None:
         import duckdb
         c = duckdb.connect()
-        for t in TABLES:
-            if not (DATA_DIR / f"{t}.parquet").is_file():
+        for t in TABLES + (EXTRA_TABLES if CURATED else ()):
+            path = DATA_DIR / f"{t}.parquet"
+            if t == "transactions" and CURATED:
+                path = DATA_DIR / "transactions" / "**" / "*.parquet"
+            if t != "transactions" and not path.is_file():
                 c.close()
                 raise FileNotFoundError(
                     f"Missing {DATA_DIR / (t + '.parquet')}. "
                     "Run python scripts/generate_synthetic_data.py or set RD_DATA_DIR to your prepared data."
                 )
-            p = os.path.join(DATA_DIR, f"{t}.parquet").replace("'", "''")
-            c.execute(f"create view {t} as select * from read_parquet('{p}')")
+            p = str(path).replace("'", "''")
+            c.execute(f"create view {t} as select * from read_parquet('{p}', hive_partitioning=true)")
         _local.duck = c
     return c
 
@@ -101,7 +109,9 @@ def _convert(value, typ):
         return None
     if typ in ("integer", "bigint", "smallint", "tinyint"):
         return int(value)
-    if typ in ("double", "float", "real", "decimal"):
+    if typ.startswith("decimal"):
+        return float(round(Decimal(value), 4))
+    if typ in ("double", "float", "real"):
         return round(float(value), 4)
     if typ == "boolean":
         return value.lower() == "true"
@@ -119,10 +129,14 @@ def _rows_athena(sql):
         WorkGroup=ATHENA_WORKGROUP,
     )["QueryExecutionId"]
     delay = 0.2
+    deadline = time.monotonic() + float(os.environ.get("RD_ATHENA_TIMEOUT_SECONDS", "120"))
     while True:
         st = cli.get_query_execution(QueryExecutionId=qid)["QueryExecution"]["Status"]
         if st["State"] in ("SUCCEEDED", "FAILED", "CANCELLED"):
             break
+        if time.monotonic() >= deadline:
+            cli.stop_query_execution(QueryExecutionId=qid)
+            raise TimeoutError(f"Athena query timed out: {qid}")
         time.sleep(delay)
         delay = min(delay * 1.5, 1.0)
     if st["State"] != "SUCCEEDED":
@@ -163,6 +177,17 @@ def one(sql):
     return r[0] if r else None
 
 
-def baseline_share(category):
+def baseline_share(category, as_of=None):
+    if CURATED:
+        if as_of is None:
+            raise ValueError("A historical cutoff is required for curated baselines.")
+        r = one(f"""select coalesce(sum(case when category={lit(category)} then n else 0 end)*1.0
+            / nullif(sum(n),0),0) as share from company_daily where return_date < {dlit(as_of)}""")
+        return float(r["share"]) if r else 0.0
     r = one(f"select share from baseline where category = {lit(category)}")
     return r["share"] if r else 0.0
+
+
+def detection_filter(alias=""):
+    """Only v2 records eligible for a request-count signal; financial outcomes differ."""
+    return f"{alias + '.' if alias else ''}eligible_for_detection" if CURATED else "true"

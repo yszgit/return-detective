@@ -1,5 +1,6 @@
 """Repository-relative settings shared by the CLI, UI and data tools."""
 import os
+import json
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -18,7 +19,12 @@ if BACKEND not in ("athena", "duckdb"):
     raise ValueError("RD_BACKEND must be 'athena' or 'duckdb'")
 DATA_DIR = local_path("RD_DATA_DIR", ROOT / "data" / "synthetic")
 RUNTIME_DIR = local_path("RD_RUNTIME_DIR", ROOT / "runtime")
-BACKTEST_PATH = local_path("RD_BACKTEST_PATH", ROOT / "evaluation" / "results" / "cases_backtest.csv")
+DATASET_VERSION = os.environ.get('RD_DATASET_VERSION')
+if not DATASET_VERSION:
+    manifest=DATA_DIR/'manifest.json'
+    DATASET_VERSION=str(json.loads(manifest.read_text()).get('schema_version',1)) if BACKEND=='duckdb' and manifest.is_file() else '1'
+BACKTEST_PATH = local_path("RD_BACKTEST_PATH", ROOT / "evaluation" / "results" /
+                          ('curated_v2_backtest.csv' if DATASET_VERSION=='2' else 'cases_backtest.csv'))
 
 
 def is_synthetic():

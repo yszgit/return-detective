@@ -21,12 +21,18 @@ data/**/*.json
 *.parquet
 *.duckdb
 *.duckdb.wal
-# Explicitly selected, pseudonymized snapshot requested for this private branch.
+# User-authorized complete pseudonymized official v2 snapshot for the private branch.
 !data/cleaned/returns.parquet
 !data/cleaned/sku_sales.parquet
 !data/cleaned/exchanges.parquet
 !data/cleaned/baseline.parquet
 !data/cleaned/manifest.json
+!data/cleaned/quality_report.json
+!data/cleaned/return_fees.parquet
+!data/cleaned/item_flags.parquet
+!data/cleaned/order_lines.parquet
+!data/cleaned/company_daily.parquet
+!data/cleaned/transactions/**/*.parquet
 runtime/
 .ruff_cache/
 .DS_Store

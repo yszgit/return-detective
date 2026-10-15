@@ -2,6 +2,8 @@
 
 The explicitly selected, pseudonymized real-data snapshot is committed under [`cleaned/`](cleaned/README.md). Raw inputs and other generated/private tables remain ignored. Choose a workflow:
 
+The active real-data release is now complete official **v2**, with nine tables and all six CSV sources. Use [the current builder and AWS handoff](../docs/OFFICIAL_DATA_V2.md); the four-table preparation examples below are legacy workflows. The manifest and quality report define the active release.
+
 | Workflow | Data location | How to prepare |
 | --- | --- | --- |
 | Default local demo | `data/synthetic/` (ignored) | `python scripts/generate_synthetic_data.py` |

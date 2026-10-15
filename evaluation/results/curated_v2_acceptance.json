@@ -1,0 +1,102 @@
+{
+  "status": "PASS_FOR_SUPPORTED_DATA_BACKTESTS",
+  "schema_version": 2,
+  "dataset_manifest_sha256": "46d09edd70e8afda147dc57224d2f7354fa73120d525cab7978d762b9d85462b",
+  "six_source_coverage": {
+    "oms": {
+      "source_rows": 649745,
+      "output_rows": 649745
+    },
+    "flags": {
+      "source_rows": 1597921,
+      "output_rows": 1597921
+    },
+    "fees": {
+      "source_rows": 521660,
+      "output_rows": 521660
+    },
+    "exchanges": {
+      "source_rows": 61934,
+      "output_rows": 61934
+    },
+    "orders": {
+      "source_rows": 1000000,
+      "output_rows": 1000000
+    },
+    "transactions": {
+      "source_rows": 8701520,
+      "output_rows": 8701520
+    }
+  },
+  "reconciled_numeric_totals": {
+    "return_units": {
+      "source": "653771",
+      "output": "653771",
+      "passed": true
+    },
+    "refund_nominal": {
+      "source": "45227217.96",
+      "output": "45227217.96",
+      "passed": true
+    },
+    "order_requested_units": {
+      "source": "1014431",
+      "output": "1014431",
+      "passed": true
+    },
+    "order_shipped_units": {
+      "source": "1013613",
+      "output": "1013613",
+      "passed": true
+    },
+    "exchange_units": {
+      "source": "61934",
+      "output": "61934",
+      "passed": true
+    },
+    "exchange_nominal_sales": {
+      "source": "3656657.749999",
+      "output": "3656657.749999",
+      "passed": true
+    },
+    "transaction_net_units": {
+      "source": "7586902",
+      "output": "7586902",
+      "passed": true
+    }
+  },
+  "transaction_money_reconciliation": {
+    "net_sales_retail_amount": {
+      "source_nominal_total": "351136662.265589300000",
+      "output_nominal_total": "351136662.265589300000"
+    },
+    "net_sales_cost_amount": {
+      "source_nominal_total": "112587164.369710990000",
+      "output_nominal_total": "112587164.369710990000"
+    },
+    "gross_margin_amount": {
+      "source_nominal_total": "238549498.456356115000",
+      "output_nominal_total": "238549498.456356115000"
+    }
+  },
+  "current_regression_tests_passed": 35,
+  "legacy_regression_tests_passed": 7,
+  "actual_data_scenarios": {
+    "isolated": "ISOLATED",
+    "quality": "INVESTIGATE",
+    "fit": "INVESTIGATE"
+  },
+  "actual_screen_spot_checks_passed": 20,
+  "repeat_input": "ATTACH_TO_CASE; no duplicate actions or approvals",
+  "real_data_streamlit_scripted_scenario": "PASS",
+  "aws_upload_plan": "validated dry run; schemas match final manifest",
+  "aws_live_calls": 0,
+  "llm_calls": 0,
+  "limitations": [
+    "No confirmed root-cause labels: cannot report classification accuracy.",
+    "Currency, fee eligibility/effective-date policies and fee observation times not supplied.",
+    "Order sample and transaction brands do not cover all returns; no population sales denominator.",
+    "Final-sale, shipped quantities and final return statuses are undated snapshot attributes.",
+    "Business-date transactions and exchanges have no intraday event ordering."
+  ]
+}

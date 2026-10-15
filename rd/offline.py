@@ -18,6 +18,11 @@ def run_scripted(return_id, as_of, emit=print):
     T, I, R = "Triage Agent", "Investigator Agent", "Response Agent"
     emit({"agent": "System", "type": "stage", "text": f"New return #{return_id} received on {as_of} (scripted, no LLM)"})
     ret = _call(emit, T, tools.get_return, return_id=return_id)
+    if 'error' in ret or ret.get('eligible_for_detection') is False:
+        t={'decision':'DATA_INSUFFICIENT','style':ret.get('style'),'category':ret.get('category'),
+           'rationale':'The record is unavailable at this cutoff or fails the documented detection eligibility rules.'}
+        emit({'agent':T,'type':'decision','data':t})
+        return {'triage':t}
     scr = _call(emit, T, tools.screen_style, style=ret["style"])
     mine = next((s for s in scr if s["category"] == ret["category"]), None)
     sig = next((s for s in scr if s["level"] == "SIGNAL"), None)
@@ -28,7 +33,13 @@ def run_scripted(return_id, as_of, emit=print):
              "rationale": f"{lvl}: {mine['category_returns'] if mine else 0} {ret['category']} returns in 28 days."}
         emit({"agent": T, "type": "decision", "data": t})
         return {"triage": t}
-    _call(emit, T, tools.find_open_case, style=ret["style"], category=target["category"])
+    existing = _call(emit, T, tools.find_open_case, style=ret["style"], category=target["category"])
+    if existing.get('case_id'):
+        tools.store.link_returns(existing['case_id'],[return_id])
+        t={'decision':'ATTACH_TO_CASE','style':ret['style'],'category':target['category'],
+           'case_id':existing['case_id'],'rationale':'Appended this return to the existing open case.'}
+        emit({'agent':T,'type':'decision','data':t})
+        return {'triage':t}
     t = {"decision": "INVESTIGATE", "style": ret["style"], "category": target["category"],
          "rationale": f"{target['category_returns']}/{target['style_returns']} returns ({target['category_share']:.0%}) vs "
                       f"{target['company_baseline_share']:.0%} baseline, z={target['z_score']}, {target['distinct_locations']} locations."}

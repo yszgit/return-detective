@@ -7,7 +7,7 @@ A (style, category) pair raises a SIGNAL when, over the trailing window:
 Statistics only raise a flag; the agents decide what it means.
 """
 import math
-from .data import one, lit, dlit, days_before, baseline_share
+from .data import one, lit, dlit, days_before, baseline_share, detection_filter
 
 WINDOW_DAYS = 28
 MIN_COUNT = {"Quality": 5, "Fit: too small": 10, "Fit: too big": 10, "Fit: uncomfortable": 8,
@@ -19,7 +19,7 @@ WATCHED = list(MIN_COUNT)
 
 
 def window_sql(as_of, days):
-    return f"return_date > {dlit(days_before(as_of, days))} and return_date <= {dlit(as_of)}"
+    return f"return_date > {dlit(days_before(as_of, days))} and return_date <= {dlit(as_of)} and {detection_filter()}"
 
 
 def style_window_counts(style, as_of, window_days=WINDOW_DAYS):
@@ -36,7 +36,7 @@ def screen(style, category, as_of, window_days=WINDOW_DAYS, _counts=None):
     counts, locations = _counts or style_window_counts(style, as_of, window_days)
     n = sum(counts.values())
     k = counts.get(category, 0)
-    p = baseline_share(category)
+    p = baseline_share(category, as_of)
     share = k / n if n else 0.0
     z = (k - n * p) / math.sqrt(n * p * (1 - p)) if n and 0 < p < 1 else 0.0
     lift = share / p if p else 0.0

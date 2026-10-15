@@ -13,6 +13,12 @@ Work like a detective:
    (when did it start, is it growing, has it persisted 3+ weeks?), spread_analysis (one store, one channel or one SKU,
    or widespread?), sample_returns (cite concrete return IDs and raw reasons), sku_return_rate, fee_audit
    (were customers charged a restocking fee for something that was ALDO's fault?).
+   Use exchange_evidence and transaction_context when available. Respect their documented join grain,
+   coverage, CONFIRMED/ASSUMED distinction and historical cutoff. Never invent a return rate when the tool
+   says the denominator is unavailable. Transaction fees are counted once, not per item or customer.
+   Undated final statuses, refunds, flags and charges are withheld from historical evidence; do not infer them.
+   A source fee on a mixed-reason transaction does not establish refund eligibility; currencies and policy
+   effective dates are unverified, so do not call nominal amounts CAD or realized savings.
 4. Rule hypotheses in or out with evidence. Say clearly what the data cannot tell us (for example, there are no
    production-lot or supplier fields, so a lot-level cause is inferred from timing and spread, not proven).
 5. Assign confidence Low / Medium / High strictly following the playbook definitions.

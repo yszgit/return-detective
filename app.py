@@ -497,17 +497,17 @@ def impact_tab():
     if not BACKTEST.is_file():
         st.markdown(_notice("No backtest results found. See evaluation/README.md to generate and select a result file.", "plain"), unsafe_allow_html=True)
         return
-    st.caption("Historical retrospective analysis; these figures are not measured savings. See evaluation/README.md for methodology and limitations.")
+    st.caption("Rule replay for the selected result file. Persistence is not confirmed root-cause accuracy; these figures are not measured savings.")
     df, both = backtest()
     tiles = [
         (f"#{int(both.returns_at_flag.median())}", "related return at which the agent flags a systemic issue",
          f"vs #{int(both.returns_at_report.median())} with a monthly report"),
         (f"{int(both.lead_days.median())} days", "earlier detection (median)", "same cases, same data"),
-        (f"{len(df):,}", "systemic signals found in 2 years", f"{(df.category == 'Quality').sum()} quality, "
+        (f"{len(df):,}", "statistical signals in the evaluated period", f"{(df.category == 'Quality').sum()} quality, "
          f"{df.category.str.startswith('Fit').sum()} fit"),
         (f"{df.report_date.isna().sum():,}", "signals a monthly report never catches", "too small per month to show up"),
     ]
-    st.markdown(_label("Backtest on two years of returns"), unsafe_allow_html=True)
+    st.markdown(_label("Historical rule replay"), unsafe_allow_html=True)
     cols = st.columns(4, gap="large")
     for col, (big, label, sub) in zip(cols, tiles):
         col.markdown(_metric(html.escape(big), html.escape(label), html.escape(sub)), unsafe_allow_html=True)
@@ -545,7 +545,7 @@ def impact_tab():
              .configure_axisX(grid=False)
              .configure_legend(labelFont="Jost", labelColor=CHARCOAL, padding=0, offset=18))
     st.altair_chart(chart, width="stretch")
-    st.caption("Real ALDO return data. The agent's screen fires 64 days before a month-end report would, with 47 fewer defective pairs returned.")
+    st.caption("Legacy v1 Glindafied illustration; these fixed annotations are separate from the current v2 benchmark above. Earlier signals do not establish avoided returns.")
 
     st.markdown('<div class="rd-h">Value of earlier detection</div>'
                 '<div class="rd-h-sub">Illustrative. Adjust the assumptions.</div>', unsafe_allow_html=True)

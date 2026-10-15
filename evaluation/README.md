@@ -1,5 +1,20 @@
 # Evaluation
 
+## Current official v2
+
+With `RD_DATA_DIR=data/cleaned`, `backtest.py` routes to `chronological.py`: eligible records, strictly prior-day baselines, eligible arrival days and complete 28-day follow-up. Undated flags/fees/statuses/shipments are not historical decision features.
+
+```sh
+RD_BACKEND=duckdb RD_DATA_DIR=data/cleaned python evaluation/backtest.py \
+  --start 2025-01-01 --end 2025-12-31 --out runtime/evaluation/v2.csv
+```
+
+`results/curated_v2_backtest.csv` and its summary contain the regenerated 2025 evaluation: **889** signals, **55.46% persistence proxy**, **94** month-report comparable cases and **40.5-day** median lead. This is a zero-model rule replay, not accuracy, causal savings, proof of unseen development data or incremental LLM value. The comparator uses different count thresholds/cadence. The summary records the source manifest hash and method.
+
+Athena uses the same interface with `RD_DATASET_VERSION=2`. [Contracts](../docs/DATA_CONTRACTS.md) specify remaining source limits. Agent evaluation still requires reviewed labels, real model calls and state/approval verification; cleaning does not establish cloud connectivity.
+
+## Legacy v1 and synthetic compatibility
+
 `backtest.py` uses the thresholds imported from `rd/detect.py`. It compares daily trailing-28-day signals with a month-end report using a minimum of 30 category returns. The retained `results/cases_backtest.csv` is the historical output inherited from `feature/agent`, not a result newly produced during this reorganization.
 
 `results/cases_backtest_from_zip.csv` separately preserves the 1,201-row aggregate result supplied in `return_detective_code.zip`. It has no `sustained_next_28d` column and does not replace the default 1,391-row branch snapshot. See [snapshot provenance](results/README.md) for the exact source, columns and checksum. Neither snapshot is cleaned return-level data.

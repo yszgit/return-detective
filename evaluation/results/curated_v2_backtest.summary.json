@@ -1,0 +1,42 @@
+{
+  "dataset_version": 2,
+  "baseline": "strictly prior calendar days",
+  "trigger": "eligible style return arrival",
+  "evaluation_from": "2025-01-01",
+  "evaluation_through": "2025-12-31",
+  "dataset_manifest_sha256": "46d09edd70e8afda147dc57224d2f7354fa73120d525cab7978d762b9d85462b",
+  "signals": 889,
+  "complete_followup_cases": 889,
+  "persistence_proxy": 0.5545556805399325,
+  "comparable_cases": 94,
+  "median_lead_days": 40.5,
+  "model_calls": 0,
+  "accuracy": null,
+  "limitations": [
+    "No confirmed problem labels; persistence is not accuracy.",
+    "Month-end comparator uses >=30 records and different frequency; this is not incremental LLM value.",
+    "Undated final statuses, flags, shipment counts and fees are not historical features."
+  ],
+  "thresholds": {
+    "window_days": 28,
+    "min_count": {
+      "Quality": 5,
+      "Fit: too small": 10,
+      "Fit: too big": 10,
+      "Fit: uncomfortable": 8,
+      "Expectation gap": 6,
+      "Fulfilment error": 6,
+      "Damaged in transit": 5
+    },
+    "min_lift": {
+      "Quality": 4,
+      "Fit: too small": 2.5,
+      "Fit: too big": 2.5,
+      "Fit: uncomfortable": 3,
+      "Expectation gap": 3,
+      "Fulfilment error": 3,
+      "Damaged in transit": 4
+    },
+    "min_z": 4.0
+  }
+}

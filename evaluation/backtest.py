@@ -23,7 +23,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 os.environ.setdefault("RD_BACKEND", "duckdb")
-from rd.data import rows  # noqa: E402
+from rd.data import rows, CURATED  # noqa: E402
 from rd.detect import MIN_COUNT, MIN_LIFT, MIN_Z, WINDOW_DAYS  # noqa: E402
 from rd.config import RUNTIME_DIR  # noqa: E402
 
@@ -31,7 +31,10 @@ REPORT_MIN = 30
 OUT = RUNTIME_DIR / "evaluation" / "cases_backtest.csv"
 
 
-def main(output_path=OUT):
+def main(output_path=OUT, start=None, end=None):
+    if CURATED:
+        from evaluation.chronological import run
+        return run(output_path,start,end)
     base = pd.DataFrame(rows("select category, share from baseline")).set_index("category")["share"]
     d = pd.DataFrame(rows("""select style, category, return_date, count(*) as n from returns
                               where style is not null group by style, category, return_date"""))
@@ -86,4 +89,7 @@ def main(output_path=OUT):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=OUT)
-    main(parser.parse_args().out)
+    parser.add_argument('--start',help='v2 evaluation start; earlier records remain available for training history')
+    parser.add_argument('--end',help='v2 evaluation end; later records are used only for follow-up outcomes')
+    args=parser.parse_args()
+    main(args.out,args.start,args.end)

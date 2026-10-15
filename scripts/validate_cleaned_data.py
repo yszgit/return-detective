@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import sys
 from pathlib import Path
 
 import duckdb
@@ -25,6 +26,10 @@ def require(condition, message):
 def main(data_dir):
     data_dir = data_dir.resolve()
     manifest = json.loads((data_dir / "manifest.json").read_text())
+    if manifest.get('schema_version') == 2:
+        sys.path.insert(0,str(ROOT))
+        from scripts.validate_official_data import validate
+        return validate(data_dir)
     require(set(manifest["tables"]) == set(EXPECTED), "Unexpected manifest tables")
     with duckdb.connect() as con:
         for name, expected_columns in EXPECTED.items():

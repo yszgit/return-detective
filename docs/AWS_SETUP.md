@@ -19,11 +19,12 @@ Use the region actually assigned by the workshop. Optional `RD_FAST_MODEL_ID` ch
 
 ## Athena over authorized private data
 
-Prepare the four Parquet tables with `scripts/prepare_data.py` into ignored `data/private/`, upload through the team's authorized data process to private S3, and register `returns`, `sku_sales`, `exchanges`, `baseline` in Glue. This repository does not provision those resources.
+For the current official v2 release, validate and upload all nine tables using `scripts/export_aws_dataset.py`; follow [the v2 handoff guide](OFFICIAL_DATA_V2.md). It generates the exact schemas and month partitions. `scripts/prepare_data.py` describes legacy v1 only. The uploader does not provision infrastructure or upload raw customer sources.
 
 ```sh
 export RD_BACKEND=athena
-export RD_ATHENA_DB=aldo_returns
+export RD_DATASET_VERSION=2
+export RD_ATHENA_DB=aldo_returns_v2
 export RD_ATHENA_OUTPUT='s3://<your-private-bucket>/athena-results/'
 export RD_ATHENA_WORKGROUP=primary
 python scripts/check_aws.py

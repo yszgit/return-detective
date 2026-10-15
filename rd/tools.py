@@ -10,7 +10,7 @@ import os
 from strands import tool
 
 from . import store
-from .data import rows, one, lit, dlit, days_before, baseline_share
+from .data import rows, one, lit, dlit, days_before, baseline_share, CURATED
 from .detect import screen, screen_all, window_sql
 
 class _AsOf:
@@ -31,6 +31,10 @@ PLAYBOOK = os.path.join(os.path.dirname(__file__), "policy", "response_playbook.
 ALDO_FAULT = ("Quality", "Fulfilment error", "Damaged in transit", "Delivery failure")
 RETURN_COLS = ("return_id, banner, order_number, sku, style, return_order_number, channel, return_date, status, "
                "refund, qty, raw_reason, store, category, restocking_fee, final_sale, aldo_fault")
+if CURATED:
+    RETURN_COLS = RETURN_COLS.replace('restocking_fee', 'transaction_fee_amount') + (
+        ', return_created_at_utc, missing_style, invalid_quantity, unknown_category, flag_missing, '
+        'fee_missing, eligible_for_detection, currency_code')
 
 
 def _asof():
@@ -50,7 +54,14 @@ def _flag(cond):
 def get_return(return_id: int) -> str:
     """Get one return record: style, SKU, banner, channel, store, date, reason, normalized category, refund and restocking fee.
     Customer identifiers are deliberately not returned."""
-    r = one(f"select {RETURN_COLS} from returns where return_id = {int(return_id)}")
+    r = one(f"select {RETURN_COLS} from returns where return_id = {int(return_id)} and return_date <= {dlit(_asof())}")
+    if r and CURATED:
+        r=dict(r)
+        # These values are kept in the analytical snapshot, but their observation times
+        # were not supplied. They cannot become features of a historical agent run.
+        for field in ('status','refund','final_sale','transaction_fee_amount','flag_missing','fee_missing'):
+            r[field]=None
+        r['snapshot_attributes_point_in_time_available']=False
     return _j(r or {"error": "return not found"})
 
 
@@ -78,7 +89,7 @@ def style_reason_mix(style: str, days: int = 90) -> str:
     tot = sum(x["n"] for x in r) or 1
     for x in r:
         x["share"] = round(x["n"] / tot, 3)
-        x["company_share"] = round(baseline_share(x["category"]), 3)
+        x["company_share"] = round(baseline_share(x["category"], _asof()), 3)
     return _j({"style": style, "days": days, "total_returns": tot, "mix": r})
 
 
@@ -121,7 +132,8 @@ def spread_analysis(style: str, category: str, days: int = 60) -> str:
 def sample_returns(style: str, category: str, limit: int = 12) -> str:
     """List the most recent returns of the style in this category (IDs, date, channel, store, SKU, raw reason,
     refund, fee) to cite as evidence."""
-    r = rows(f"""select return_id, return_date, banner, channel, store, sku, raw_reason, refund, restocking_fee
+    money = 'null as refund, null as transaction_fee_amount' if CURATED else 'refund,restocking_fee'
+    r = rows(f"""select return_id, return_date, banner, channel, store, sku, raw_reason, {money}
                  from returns where style = {lit(style)} and category = {lit(category)} and return_date <= {dlit(_asof())}
                  order by return_date desc, return_id desc limit {int(limit)}""")
     return _j(r)
@@ -131,6 +143,16 @@ def sample_returns(style: str, category: str, limit: int = 12) -> str:
 def sku_return_rate(style: str) -> str:
     """Return rate by SKU using order lines sold as the denominator. Sales data only covers orders from
     Aug 2025 onward, so earlier periods have no rate."""
+    if CURATED:
+        r = rows(f"""select sku,count(*) as return_lines,
+            sum(case when order_line_present then 1 else 0 end) as linked_return_lines
+            from returns where style={lit(style)} and return_date<={dlit(_asof())}
+            group by sku order by return_lines desc,sku limit 10""")
+        for x in r:
+            x['return_rate'] = None
+            x['rate_status'] = 'unavailable_partial_order_coverage_and_undated_shipment_snapshot'
+        return _j({'style':style,'skus':r,'population_return_rate_available':False,
+                   'note':'Order sample coverage and temporal eligibility are insufficient for a population return rate; unknown is not zero.'})
     r = rows(f"""select r.sku, count(*) as returns, max(s.lines_sold) as lines_sold
                  from returns r left join sku_sales s on r.sku = s.sku
                  where r.style = {lit(style)} and r.return_date <= {dlit(_asof())} and r.return_date >= DATE '2025-08-01'
@@ -144,10 +166,51 @@ def sku_return_rate(style: str) -> str:
 def fee_audit(style: str, category: str) -> str:
     """Check whether customers returning this style for this category were charged a restocking fee. Charging a
     fee is unfair when the cause is ALDO's responsibility (quality, fulfilment, transit damage)."""
+    if CURATED:
+        related = f"""select distinct return_order_number from returns where style={lit(style)}
+            and category={lit(category)} and qty>0 and return_date<={dlit(_asof())}"""
+        n=one(f'select count(*) as n from ({related}) r')['n']
+        return _j({'related_return_transactions':n,'charged':None,'fees':None,
+                   'historical_fee_evidence_available':False,'currency_verified':False,
+                   'aldo_fault_category':category in ALDO_FAULT,
+                   'note':'Fee amounts/charge outcomes are undated snapshot facts and are withheld from historical agent decisions. Descriptive transaction-grain reconciliation is in quality_report.json; mixed-reason transactions do not prove refund eligibility.'})
     r = one(f"""select count(*) as n, {_flag('restocking_fee > 0')} as charged, coalesce(sum(restocking_fee), 0) as fees
                 from returns where style = {lit(style)} and category = {lit(category)} and return_date <= {dlit(_asof())}""")
     r["aldo_fault_category"] = category in ALDO_FAULT
     return _j(r)
+
+
+@tool
+def exchange_evidence(style: str) -> str:
+    """Order-level exchange evidence up to the replay date; CONFIRMED and ASSUMED are different.
+    An order can contain multiple products, so this is not an item-level sizing conclusion."""
+    if not CURATED:
+        return _j({'available':False,'reason':'Requires the v2 official dataset.'})
+    r = rows(f"""select e.confidence,count(*) as exchange_lines,min(e.exchange_date) as first_date,
+        max(e.exchange_date) as last_date from exchanges e join (
+          select distinct order_number from returns where style={lit(style)} and return_date<={dlit(_asof())}
+        ) r using(order_number) where e.exchange_date<={dlit(_asof())} and not e.invalid_exchange
+        group by e.confidence order by e.confidence""")
+    return _j({'available':True,'style':style,'as_of':_asof(),'evidence':r,
+               'link_grain':'original_order_only; item match and sizing direction unproven'})
+
+
+@tool
+def transaction_context(style: str, days: int = 90) -> str:
+    """Dated transaction context by country/banner. Exact style-name matches are not SKU joins.
+    Monetary fields retain source scale; currency/FX and causal savings are not established."""
+    if not CURATED:
+        return _j({'available':False,'reason':'Requires the v2 official dataset.'})
+    r = rows(f"""select banner,country_code,return_indicator,count(*) as transaction_lines,
+        sum(net_sales_units) as net_units,sum(gross_margin_amount) as source_nominal_margin
+        from transactions where lower(style_name)=lower({lit(style)}) and not invalid_transaction
+        and business_date>{dlit(days_before(_asof(),max(1,int(days))))} and business_date<={dlit(_asof())}
+        and business_month>={lit(str(days_before(_asof(),max(1,int(days))))[:7])}
+        and business_month<={lit(_asof()[:7])}
+        group by banner,country_code,return_indicator order by banner,country_code,return_indicator""")
+    return _j({'available':True,'style':style,'as_of':_asof(),'groups':r,
+               'currency_verified':False,'link_grain':'exact_style_name_only; no SKU/product-master join',
+               'note':'An empty result means no matching evidence in the supplied coverage, not zero population sales.'})
 
 
 @tool
@@ -195,6 +258,9 @@ def waive_restocking_fees(case_id: str) -> str:
         return _j({"refused": "Fee waivers apply only when the root cause is ALDO's responsibility."})
     if c.get("confidence") not in ("Medium", "High"):
         return _j({"refused": "Confidence must be Medium or High before waiving fees. Record findings first."})
+    if CURATED:
+        return _j({'refused':'Official data does not supply verified currency, fee-policy effective dates or charge observation times. Financial execution requires those facts.',
+                   'executed':False,'data_status':'missing_financial_authorization_evidence'})
     f = rows(f"""select return_id, restocking_fee from returns where style = {lit(c['style'])} and category = {lit(c['category'])}
                  and restocking_fee > 0 and return_date <= {dlit(_asof())}""")
     total = round(sum(x["restocking_fee"] for x in f), 2)
@@ -276,7 +342,7 @@ def verify_case(case_id: str) -> str:
 
 TRIAGE_TOOLS = [get_return, screen_style, find_open_case]
 INVESTIGATOR_TOOLS = [style_reason_mix, weekly_timeline, spread_analysis, sample_returns, sku_return_rate,
-                      fee_audit, read_playbook]
+                      fee_audit, exchange_evidence, transaction_context, read_playbook]
 RESPONSE_TOOLS = [read_playbook, open_case, record_findings, notify_owner_team, waive_restocking_fees,
                   request_fit_guidance_update, request_stock_hold, draft_supplier_claim, request_proactive_outreach,
                   schedule_verification]

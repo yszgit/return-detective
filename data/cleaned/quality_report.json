@@ -1,0 +1,87 @@
+{
+  "source_coverage": {
+    "oms": {
+      "source_rows": 649745,
+      "output_rows": 649745
+    },
+    "flags": {
+      "source_rows": 1597921,
+      "output_rows": 1597921
+    },
+    "fees": {
+      "source_rows": 521660,
+      "output_rows": 521660
+    },
+    "exchanges": {
+      "source_rows": 61934,
+      "output_rows": 61934
+    },
+    "orders": {
+      "source_rows": 1000000,
+      "output_rows": 1000000
+    },
+    "transactions": {
+      "source_rows": 8701520,
+      "output_rows": 8701520
+    }
+  },
+  "returns": {
+    "missing_style": 2386,
+    "zero_quantity": 1587,
+    "invalid_quantity": 1587,
+    "unknown_reason": 78,
+    "invalid_date": 0,
+    "flag_missing": 481614,
+    "fee_missing": 15,
+    "order_line_missing": 499349,
+    "order_after_return": 0,
+    "eligible_for_detection": 645695,
+    "completed_positive_quantity": 599137
+  },
+  "fees": {
+    "source_nominal_total": "461324.40",
+    "transaction_nominal_total": "461324.40",
+    "matched_transaction_nominal_total": "449170.60",
+    "invalid_amounts": 0,
+    "mixed_reason_transactions": 5461,
+    "currency_verified_transactions": 0
+  },
+  "order_lines": {
+    "invalid_lines": 0,
+    "matched_return_lines": 150396
+  },
+  "exchanges": {
+    "invalid_lines": 0,
+    "after_returns_snapshot": 4423
+  },
+  "transactions": {
+    "invalid_lines": 0,
+    "unusual_quantity_sign": 853,
+    "net_units": 7586902,
+    "monetary_scale": 12,
+    "money_reconciliation": {
+      "net_sales_retail_amount": {
+        "source_nominal_total": "351136662.265589300000",
+        "output_nominal_total": "351136662.265589300000"
+      },
+      "net_sales_cost_amount": {
+        "source_nominal_total": "112587164.369710990000",
+        "output_nominal_total": "112587164.369710990000"
+      },
+      "gross_margin_amount": {
+        "source_nominal_total": "238549498.456356115000",
+        "output_nominal_total": "238549498.456356115000"
+      }
+    }
+  },
+  "unknowns_are_not_imputed": true,
+  "automatic_financial_execution_supported": false,
+  "limitations": [
+    "No confirmed root-cause labels: cannot report classification accuracy.",
+    "Currency, fee eligibility/effective-date policies and fee observation times not supplied.",
+    "Order sample and transaction brands do not cover all returns; no population sales denominator.",
+    "Final-sale, shipped quantities and final return statuses are undated snapshot attributes.",
+    "Business-date transactions and exchanges have no intraday event ordering."
+  ],
+  "cleaning_acceptance": "PASS"
+}

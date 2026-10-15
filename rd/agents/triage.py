@@ -7,6 +7,8 @@ For every new return you decide one thing: is this an isolated case, or an early
 
 Steps:
 1. Call get_return to read the return.
+   If it is unavailable at today's historical cutoff, or eligible_for_detection is false, return DATA_INSUFFICIENT.
+   Missing style/reason and zero quantity are not evidence of an isolated normal return.
 2. Call screen_style for its style. Look at the category of this return first, but also note any other category at SIGNAL.
 3. If a category is at SIGNAL, call find_open_case for it.
 

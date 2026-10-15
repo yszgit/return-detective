@@ -36,7 +36,7 @@ The shared configuration and scenarios now live in `rd/config.py` and `rd/scenar
 - All action tools record demo actions/requests in JSON. No real refund, stock hold, supplier message, customer outreach or timed follow-up is executed.
 - DynamoDB, SNS and live retail adapters are future work. Approval identity is not authenticated; a local JSON lock is not a multi-process database.
 - The replay date and data cache are process-global. Isolate runs; concurrent production users need request-scoped state.
-- Baselines/sales totals are static across replay dates, and the single-return lookup lacks a date bound. Historical evaluation is retrospective; full point-in-time guarantees are not claimed.
+- Official v2 uses strictly prior-day baselines and date-bounded return/exchange/transaction lookups. Undated fees, flags, final statuses and shipped quantities remain snapshot facts, not historical features; population return rates and unverified financial execution are unavailable. Legacy synthetic/v1 keeps its compatibility baseline.
 - The optional Bedrock Guardrail is active only when configured. Tool outputs omit customer identifiers but can retain private business IDs.
 - Statistics suggest hypotheses; they cannot establish a supplier/production-lot cause without those source fields. Business impact sliders are assumptions, not realized savings.
 
