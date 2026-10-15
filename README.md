@@ -4,6 +4,10 @@ ALDO / BSRM hackathon team workspace: detect a return pattern, investigate evide
 
 **Start here:** [Team workflow / 团队协作](docs/TEAM_WORKFLOW.md) · [AWS setup](docs/AWS_SETUP.md) · [Data contracts](docs/DATA_CONTRACTS.md) · [Architecture and delivery status](docs/ARCHITECTURE.md)
 
+## Imported cleaned-data starter
+
+The `feature/data` branch imports the team's supplied `return_detective_starter`: DuckDB data access, statistical screening, agent tool definitions, a local case store, and cleaned Parquet datasets. Read [the import guide and known issues](docs/STARTER_IMPORT.md) before integrating these modules. The existing demo commands below still use the original synthetic fixtures in `data/sample/`.
+
 ## Run without AWS
 
 Python 3.12 is the recommended shared development version. Run from the repository root:
@@ -61,4 +65,4 @@ Work on your branch, open a pull request **into `develop`**, and integrate the v
 
 Live AWS connectivity must be verified in the competition account. S3 loading, DynamoDB persistence, Lambda execution, authenticated approvals, model evaluation, and production deployment remain team work. No savings, defect root cause, or deployed AWS capability is claimed by the starter.
 
-Only synthetic fixtures belong in this repository. Keep temporary AWS credentials, real customer data, and private raw inputs outside Git. Original competition PDFs remain outside this source repository.
+The original `data/sample/` fixtures are synthetic. The separate cleaned dataset in `data/*.parquet` was supplied in the team's local starter; its provenance is recorded in the import guide without assuming it is synthetic. Keep temporary AWS credentials and private raw inputs outside Git. Original competition PDFs remain outside this source repository.
