@@ -26,6 +26,6 @@ Open tasks:
 - UI (`app.py`, Streamlit) now has shared synthetic/ALDO scenarios, live and scripted modes, saved live
   traces, case files and demo approvals. Historical impact data is in evaluation/results/cases_backtest.csv;
   it is not shown for synthetic runs. Improve verified business metrics separately from this layout cleanup.
-- Replace `rd/store.py` JSON storage with DynamoDB tables `rd_cases`, `rd_actions`, `rd_approvals`, same function API.
+- DynamoDB demo storage is optional behind `RD_STORE_BACKEND=dynamodb`; finish transactional updates and authenticated approval before production use.
 - On approval requests, publish to an SNS topic so approvers get an email.
 - Optional: Bedrock Guardrail (deny PII output), set RD_GUARDRAIL_ID; deploy agents to Bedrock AgentCore Runtime.

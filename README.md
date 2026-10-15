@@ -37,6 +37,8 @@ python run_demo.py syn_quality
 
 For the Athena backend and ALDO scenarios (`isolated`, `quality`, `fit`), follow [AWS setup](docs/AWS_SETUP.md). Live runs require your own model access and may incur AWS charges. This branch's offline checks do not establish live AWS connectivity.
 
+To create a private S3 bucket, Glue database, Athena workgroup and three DynamoDB demo tables, use the [storage stack and setup steps](docs/AWS_SETUP.md#create-s3-glue-athena-and-dynamodb-demo-resources). The stack template and synthetic upload script are prepared, but no AWS resources have been created from this checkout. Keep `RD_BACKEND=duckdb` and `RD_STORE_BACKEND=json` until the storage check succeeds.
+
 The complete official **v2** snapshot is included under [`data/cleaned/`](data/cleaned/README.md): all six business CSVs, nine analytical tables, 649,745 return rows and 8,701,520 transaction rows. Customer identifiers are removed and business keys are consistently tokenized. Transaction-level fees, dated orders, quality flags and prior-day history replace the earlier four-table assumptions. To run it locally without AWS:
 
 ```sh
@@ -80,9 +82,14 @@ The interface uses a monochrome layout with numbered agent stages, styled case/a
 - RD_FAST_MODEL_ID optionally selects another model for Triage and Response. If unset, they use RD_MODEL_ID too.
 - The current pipeline starts Triage for the selected return; the statistical screen is a tool called within that stage. Automatic model-free filtering before Triage is future work.
 - An agent may make several model requests while using tools. Historical signal counts are not measured daily model-call counts or costs.
-- Cases, actions and approvals remain local demo records. UI changes do not deploy DynamoDB, SNS or real retail execution.
+- Cases, actions and approvals use local JSON by default; `RD_STORE_BACKEND=dynamodb` persists the same demo records in three deployed tables. SNS and real retail execution remain unimplemented.
 
 ## Verification
+
+The UI now includes dated follow-up checks and an **Agent evaluation** tab.
+Persistent signals reopen the existing case and feed its previous hypothesis and
+new evidence back into the Investigator. See [verification and comparison guide](docs/VERIFICATION_DEMO.md).
+The follow-up is triggered from the UI/CLI; it is not a background AWS schedule.
 
 ```sh
 python -m unittest discover -s tests -v

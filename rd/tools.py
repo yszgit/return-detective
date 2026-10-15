@@ -80,6 +80,17 @@ def find_open_case(style: str, category: str) -> str:
     return _j(c or {"open_case": None})
 
 
+@tool
+def read_case(case_id: str) -> str:
+    """Read a case and recorded actions/approvals before proposing follow-up actions.
+    Rejected proposals must stay rejected; an action log represents a simulation.
+    """
+    db = store.snapshot()
+    return _j({'case': db['cases'].get(case_id),
+               'actions': [a for a in db['actions'] if a['case_id'] == case_id],
+               'approvals': [a for a in db['approvals'] if a['case_id'] == case_id]})
+
+
 # ----------------------------------------------------------- Investigator tools
 @tool
 def style_reason_mix(style: str, days: int = 90) -> str:
@@ -270,7 +281,7 @@ def waive_restocking_fees(case_id: str) -> str:
         return _j({"executed": False, "already_waived": True,
                    "message": f"All fee-charged returns for this case are already waived (CA${already_waived:.2f} so far). Nothing new to waive."})
     total = round(sum(x["restocking_fee"] for x in f), 2)
-    detail = {"returns_refunded": len(f), "amount_cad": total, "return_ids": [x["return_id"] for x in f][:50],
+    detail = {"returns_refunded": len(f), "amount_cad": total, "return_ids": [x["return_id"] for x in f],
               "future_returns": "fee-free for this style and category while the case is open"}
     store.link_returns(case_id, [x["return_id"] for x in f])
     if already_waived + total <= FEE_AUTHORITY_CAD:
@@ -279,7 +290,7 @@ def waive_restocking_fees(case_id: str) -> str:
                           waived_return_ids=sorted(already_ids | set(int(x["return_id"]) for x in f)))
         return _j({"executed": True, "within_authority": True, **detail, "action_id": a["action_id"]})
     r = store.request_approval(case_id, 2, "Waive restocking fees", detail, "Customer Care lead")
-    return _j({"executed": False, "approval_requested": r["approval_id"],
+    return _j({"executed": False, "approval_requested": r["approval_id"], "approval_status": r['status'],
                "reason": f"CA${already_waived + total:.2f} (CA${already_waived:.2f} already waived + CA${total:.2f}) exceeds the agent's CA${FEE_AUTHORITY_CAD:.0f} authority", **detail})
 
 
@@ -292,7 +303,7 @@ def request_fit_guidance_update(case_id: str, proposed_text: str) -> str:
     if c.get("confidence") not in ("Medium", "High"):
         return _j({"refused": "Record findings with confidence Medium or High first."})
     r = store.request_approval(case_id, 3, "Update product-page fit guidance", {"proposed_text": proposed_text}, "Merchandising")
-    return _j({"approval_requested": r["approval_id"], "approver": "Merchandising"})
+    return _j({"approval_requested": r["approval_id"], "approval_status": r['status'], "approver": "Merchandising"})
 
 
 @tool
@@ -303,7 +314,7 @@ def request_stock_hold(case_id: str, scope: str) -> str:
     if not c or c.get("category") != "Quality" or c.get("confidence") != "High":
         return _j({"refused": "Stock holds require a Quality case with confidence High."})
     r = store.request_approval(case_id, 4, "Hold stock pending inspection", {"scope": scope}, "Quality & Merchandising")
-    return _j({"approval_requested": r["approval_id"], "approver": "Quality & Merchandising"})
+    return _j({"approval_requested": r["approval_id"], "approval_status": r['status'], "approver": "Quality & Merchandising"})
 
 
 @tool
@@ -314,7 +325,7 @@ def draft_supplier_claim(case_id: str, claim_text: str) -> str:
     if not c or c.get("category") != "Quality" or c.get("confidence") != "High":
         return _j({"refused": "Supplier claims require a Quality case with confidence High."})
     r = store.request_approval(case_id, 5, "Send supplier quality claim", {"draft": claim_text}, "Quality & Sourcing")
-    return _j({"approval_requested": r["approval_id"], "approver": "Quality & Sourcing"})
+    return _j({"approval_requested": r["approval_id"], "approval_status": r['status'], "approver": "Quality & Sourcing"})
 
 
 @tool
@@ -327,14 +338,15 @@ def request_proactive_outreach(case_id: str, offer: str) -> str:
         return _j({"refused": "Proactive outreach requires a Quality case with confidence High."})
     r = store.request_approval(case_id, 5, "Proactive customer outreach",
                                {"offer": offer, "channel": "opted-in email only"}, "Customer Care & Privacy")
-    return _j({"approval_requested": r["approval_id"], "approver": "Customer Care & Privacy"})
+    return _j({"approval_requested": r["approval_id"], "approval_status": r['status'], "approver": "Customer Care & Privacy"})
 
 
 @tool
 def schedule_verification(case_id: str, check_after_days: int = 21) -> str:
     """Schedule a follow-up check: after N days, re-run the screen; if the signal has not fallen back, reopen the case."""
-    a = store.log_action(case_id, 0, "Schedule verification", {"check_after_days": int(check_after_days)})
-    return _j({"scheduled": True, "action_id": a["action_id"]})
+    from .verification import schedule
+    value = schedule(case_id, _asof(), check_after_days)
+    return _j({"scheduled": True, "trigger": "UI or CLI date-driven check", **value})
 
 
 @tool
@@ -351,7 +363,7 @@ def verify_case(case_id: str) -> str:
 TRIAGE_TOOLS = [get_return, screen_style, find_open_case]
 INVESTIGATOR_TOOLS = [style_reason_mix, weekly_timeline, spread_analysis, sample_returns, sku_return_rate,
                       fee_audit, exchange_evidence, transaction_context, read_playbook]
-RESPONSE_TOOLS = [read_playbook, open_case, record_findings, notify_owner_team, waive_restocking_fees,
+RESPONSE_TOOLS = [read_playbook, read_case, open_case, record_findings, notify_owner_team, waive_restocking_fees,
                   request_fit_guidance_update, request_stock_hold, draft_supplier_claim, request_proactive_outreach,
                   schedule_verification]
 VERIFY_TOOLS = [verify_case, weekly_timeline]

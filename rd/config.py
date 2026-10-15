@@ -28,6 +28,8 @@ BACKTEST_PATH = local_path("RD_BACKTEST_PATH", ROOT / "evaluation" / "results" /
 
 
 def is_synthetic():
+    if BACKEND == "athena":
+        return os.environ.get("RD_DATASET_KIND", "private").lower() == "synthetic"
     return BACKEND == "duckdb" and (DATA_DIR / "_SYNTHETIC.txt").exists()
 
 
