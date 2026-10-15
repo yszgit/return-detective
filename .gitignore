@@ -11,6 +11,7 @@ credentials
 *.pem
 *.key
 .local/
+runtime/
 tmp/
 data/raw/
 data/private/
