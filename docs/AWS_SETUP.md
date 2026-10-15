@@ -1,43 +1,38 @@
-# AWS setup / Workshop Studio
+# AWS setup / 比赛环境设置
 
-1. 登录主办方提供的 Workshop Studio，进入比赛账号，记下指定的区域代码。
-2. 在实验室的临时凭证入口复制适用于自己系统的配置命令。临时凭证包含 `AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY` 和 `AWS_SESSION_TOKEN` 三项。
-3. 把命令运行在自己的终端，之后从同一终端启动项目。凭证过期时重新获取三项，不要提交到 Git。
-4. 设置实际可用的区域和模型 ID / inference profile ID。不要使用模型显示名称。
+Kiro、GitHub 和应用调用 AWS 的凭证分别配置。Kiro profile 由主办方组织管理员授权。
 
-PowerShell（交互输入两个非秘密配置项）：
+## 本地先验证
 
-```powershell
-$env:AWS_DEFAULT_REGION = Read-Host "Competition region code"
-$env:BEDROCK_MODEL_ID = Read-Host "Enabled model or inference profile ID"
-.\.venv\Scripts\python.exe -m return_detective.check_aws
-.\.venv\Scripts\python.exe -m streamlit run app.py
-```
+~~~powershell
+conda activate aldo-hackthon
+python -m pip install -r requirements.txt
+python scripts/check_aws.py --data-only
+python run_demo.py quality --offline
+python -m streamlit run app.py
+~~~
 
-也可以把 `.env.example` 复制成 `.env` 后填写非秘密配置项；凭证仍使用实验室终端配置。`.env` 已被 Git 忽略。
+默认使用 DuckDB，读取根目录 `data/`；可用 `RD_DATA_DIR` 指定获准的数据目录。
 
-检查器先验证 STS 身份，再执行一次很小的 Bedrock 请求。返回模型回答才证明该配置已连通；本仓库不预设账号、区域、模型、真实资源或访问成功。
+## 连接比赛 AWS
 
-## Resources for the AWS owner
+复制 `.env.example` 为本机 `.env`。填入实际区域 `AWS_REGION` 和可用模型 / inference profile 的 `RD_MODEL_ID`。
 
-| Resource | Suggested setting |
-| --- | --- |
-| S3 data bucket | Choose a globally unique private name; store synthetic CSVs and policies |
-| Cases table | `return-detective-cases`; String partition key `case_id`; on-demand billing |
-| Inventory table | `return-detective-inventory`; String partition key `stock_id`; on-demand billing |
-| Actions Lambda | `return-detective-actions`; Python runtime; logs; approval validation and idempotency |
+使用 Athena 时设置 `RD_BACKEND=athena`、`RD_ATHENA_DB`、`RD_ATHENA_WORKGROUP`，以及工作组未提供结果位置时的 `RD_ATHENA_OUTPUT`。资源名称和权限由 AWS 负责人按比赛账号确认；仓库不会自动创建资源。
 
-开发身份需要调用所选 Bedrock 模型、读取指定 S3 对象、访问案件表和调用指定 Lambda 的权限。Lambda 执行角色另外需要日志和指定表的读写权限。资源创建还需要主办方允许的部署权限；出现拒绝时请 mentor 调整比赛角色。
+按 Workshop Studio 说明在本机配置本人临时 Access Key、Secret Key 和 Session Token。凭证会过期，不要进入代码、PR、聊天或截图。
 
-后端必须独立校验审批、审批人身份、操作范围和重复执行。库存更新使用条件写入或事务。演示用的 `DemoRetail` 不提供身份认证或多人共享持久化。
+~~~sh
+python scripts/check_aws.py
+~~~
 
-## Troubleshooting
+这个命令会实际验证 AWS 身份、读取配置的数据源，并发起一次小的 Bedrock 调用。成功显示数据量和 Bedrock 回复。
 
-| Error | Check |
-| --- | --- |
-| `NoCredentialsError` | Whether all three temporary credential values are set in this terminal |
-| `ExpiredToken` | Refresh temporary credentials from the lab |
-| `AccessDeniedException` | Role permissions, model account access, and any provider activation requirements |
-| `ValidationException` | Region, model ID, supported Converse API, or required inference profile |
+- ExpiredToken：更新临时凭证。
+- AccessDenied：核对账号、区域和对应资源权限。
+- 模型不可用：核对模型 / inference profile 的账号与区域可用性。
+- Athena 失败：核对 Glue 表结构、工作组、结果桶与数据位置。
 
-Official references: [temporary credentials](https://docs.aws.amazon.com/sdkref/latest/guide/feature-static-credentials.html), [model access](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html), [Lambda execution roles](https://docs.aws.amazon.com/lambda/latest/dg/lambda-intro-execution-role.html).
+GitHub CI 仅离线检查，没有自动部署。DynamoDB、真实业务动作、审批认证、通知与云端定时复查属于后续工作。
+
+参考：[Boto3 credentials](https://docs.aws.amazon.com/boto3/latest/guide/credentials.html)

@@ -1,3 +1,7 @@
+# 原始导入记录（历史）
+
+以下记录 f9ce4e7 当时的状态；当前修复见 [INTEGRATION.md](INTEGRATION.md)。哈希清单核对原始导入，不认证整合后的代码。
+
 # Cleaned starter import / 清洗数据版本
 
 这次把用户指定的本地 `return_detective_starter/return_detective/` 中 12 个原始文件上传到 `feature/data`。相对目录保持一致：`rd/`、`scripts/prepare_data.py` 和 `data/`。校验清单见 `starter-import-manifest.sha256`，记录导入时的原始字节 SHA-256。

@@ -1,131 +1,140 @@
-"""Case files, action log and the human-approval queue (a JSON file, good enough for a demo).
-In production this would be DynamoDB."""
-import json, os, threading, uuid, datetime
+"""Local prototype case store. Action records simulate retail operations."""
+import datetime
+import hashlib
+import json
+import os
+import threading
+import uuid
+from .config import ROOT
 
-RUNTIME_DIR = os.environ.get("RD_RUNTIME_DIR", os.path.join(os.path.dirname(__file__), "..", "runtime"))
-_PATH = os.path.join(RUNTIME_DIR, "cases.json")
-_lock = threading.Lock()
+RUNTIME_DIR = os.getenv("RD_RUNTIME_DIR", str(ROOT / "runtime"))
+_lock = threading.RLock()
 
+def _now():
+    return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+
+def _path():
+    return os.path.join(RUNTIME_DIR, "cases.json")
 
 def _load():
-    if not os.path.exists(_PATH):
+    if not os.path.isfile(_path()):
         return {"cases": {}, "actions": [], "approvals": []}
-    with open(_PATH) as f:
-        return json.load(f)
-
+    with open(_path(), encoding="utf-8") as source:
+        return json.load(source)
 
 def _save(db):
     os.makedirs(RUNTIME_DIR, exist_ok=True)
-    tmp = _PATH + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(db, f, indent=2, default=str)
-    os.replace(tmp, _PATH)
-
+    temporary = _path() + ".tmp"
+    with open(temporary, "w", encoding="utf-8") as target:
+        json.dump(db, target, indent=2, default=str, ensure_ascii=False)
+    os.replace(temporary, _path())
 
 def reset():
     with _lock:
         _save({"cases": {}, "actions": [], "approvals": []})
 
-
 def snapshot():
     with _lock:
         return _load()
 
+def get_case(case_id):
+    return snapshot()["cases"].get(case_id)
 
-def _now():
-    return datetime.datetime.now().isoformat(timespec="seconds")
-
-
-def find_open_case(style, category):
-    db = snapshot()
-    for c in db["cases"].values():
-        if c["style"] == style and c["category"] == category and c["status"] != "CLOSED":
-            return c
-    return None
-
+def find_open_case(style, category, as_of=None):
+    return next((case for case in snapshot()["cases"].values()
+        if case["style"] == style and case["category"] == category and case["status"] != "CLOSED"
+        and (as_of is None or case["opened_as_of"] <= str(as_of)[:10])), None)
 
 def open_case(style, category, opened_as_of, summary, evidence):
     with _lock:
+        existing = find_open_case(style, category, opened_as_of)
+        if existing:
+            return existing
         db = _load()
-        for c in db["cases"].values():
-            if c["style"] == style and c["category"] == category and c["status"] != "CLOSED":
-                return c
-        cid = "CASE-" + uuid.uuid4().hex[:6].upper()
-        c = {"case_id": cid, "style": style, "category": category, "status": "OPEN", "opened_as_of": opened_as_of,
-             "summary": summary, "evidence": evidence, "hypotheses": [], "root_cause": None, "confidence": None,
-             "owner_team": None, "linked_return_ids": [], "history": [{"at": _now(), "event": "Case opened"}]}
-        db["cases"][cid] = c
+        case_id = "CASE-" + uuid.uuid4().hex[:8].upper()
+        case = {"case_id": case_id, "style": style, "category": category, "status": "OPEN",
+            "opened_as_of": str(opened_as_of)[:10], "summary": summary, "evidence": evidence,
+            "hypotheses": [], "root_cause": None, "confidence": None, "owner_team": None,
+            "linked_return_ids": [], "history": [{"at": _now(), "event": "Case opened"}]}
+        db["cases"][case_id] = case
         _save(db)
-        return c
-
+        return case
 
 def update_case(case_id, **fields):
     with _lock:
         db = _load()
-        c = db["cases"].get(case_id)
-        if not c:
+        case = db["cases"].get(case_id)
+        if case is None:
             return None
-        for k, v in fields.items():
-            if v is not None:
-                c[k] = v
-        c["history"].append({"at": _now(), "event": "Updated: " + ", ".join(k for k, v in fields.items() if v is not None)})
+        case.update({key: value for key, value in fields.items() if value is not None})
+        case["history"].append({"at": _now(), "event": "Updated: " + ", ".join(fields)})
         _save(db)
-        return c
-
+        return case
 
 def link_returns(case_id, return_ids):
     with _lock:
-        db = _load()
-        c = db["cases"].get(case_id)
-        if not c:
+        case = get_case(case_id)
+        if not case:
             return None
-        s = set(c["linked_return_ids"]) | set(int(r) for r in return_ids)
-        c["linked_return_ids"] = sorted(s)
-        _save(db)
-        return c
+        ids = sorted(set(case["linked_return_ids"]) | {int(value) for value in return_ids})
+        return update_case(case_id, linked_return_ids=ids)
 
+def _key(case_id, action, detail):
+    raw = json.dumps([case_id, action, detail], sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode()).hexdigest()
 
-def log_action(case_id, tier, action, detail, executed_by="agent"):
+def log_action(case_id, tier, action, detail, executed_by="agent", idempotency_key=None):
     with _lock:
         db = _load()
-        a = {"action_id": "ACT-" + uuid.uuid4().hex[:6].upper(), "case_id": case_id, "tier": tier, "action": action,
-             "detail": detail, "executed_by": executed_by, "at": _now()}
-        db["actions"].append(a)
-        if case_id in db["cases"]:
-            db["cases"][case_id]["history"].append({"at": a["at"], "event": f"Action T{tier}: {action}"})
+        if case_id not in db["cases"]:
+            raise ValueError("Unknown case")
+        key = idempotency_key or _key(case_id, action, detail)
+        existing = next((item for item in db["actions"] if item.get("idempotency_key") == key), None)
+        if existing:
+            return existing
+        record = {"action_id": "ACT-" + uuid.uuid4().hex[:8].upper(), "case_id": case_id, "tier": tier,
+            "action": action, "detail": detail, "executed_by": executed_by, "at": _now(),
+            "status": "SIMULATED", "executed": False, "idempotency_key": key}
+        db["actions"].append(record)
+        db["cases"][case_id]["history"].append({"at": record["at"], "event": "Simulation recorded: " + action})
         _save(db)
-        return a
-
+        return record
 
 def request_approval(case_id, tier, action, detail, approver):
     with _lock:
         db = _load()
-        r = {"approval_id": "APR-" + uuid.uuid4().hex[:6].upper(), "case_id": case_id, "tier": tier, "action": action,
-             "detail": detail, "approver": approver, "status": "PENDING", "requested_at": _now(), "decided_at": None}
-        db["approvals"].append(r)
-        if case_id in db["cases"]:
-            db["cases"][case_id]["status"] = "AWAITING_APPROVAL"
-            db["cases"][case_id]["history"].append({"at": r["requested_at"], "event": f"Approval requested from {approver}: {action}"})
+        if case_id not in db["cases"]:
+            raise ValueError("Unknown case")
+        key = _key(case_id, action, detail)
+        existing = next((item for item in db["approvals"] if item.get("idempotency_key") == key), None)
+        if existing:
+            return existing
+        record = {"approval_id": "APR-" + uuid.uuid4().hex[:8].upper(), "case_id": case_id, "tier": tier,
+            "action": action, "detail": detail, "approver": approver, "status": "PENDING",
+            "requested_at": _now(), "decided_at": None, "idempotency_key": key}
+        db["approvals"].append(record)
+        case = db["cases"][case_id]
+        case["status"] = "AWAITING_APPROVAL"
+        case["history"].append({"at": record["requested_at"], "event": "Approval requested: " + action})
         _save(db)
-        return r
-
+        return record
 
 def decide_approval(approval_id, approve, decided_by="human reviewer"):
+    if type(approve) is not bool or not decided_by.strip():
+        raise ValueError("A boolean decision and reviewer name are required")
     with _lock:
         db = _load()
-        for r in db["approvals"]:
-            if r["approval_id"] == approval_id and r["status"] == "PENDING":
-                r["status"] = "APPROVED" if approve else "REJECTED"
-                r["decided_at"] = _now()
-                c = db["cases"].get(r["case_id"])
-                if c:
-                    c["history"].append({"at": r["decided_at"], "event": f"{r['status']} by {decided_by}: {r['action']}"})
-                    if not any(x["status"] == "PENDING" for x in db["approvals"] if x["case_id"] == r["case_id"]):
-                        c["status"] = "ACTIONED"
-                if approve:
-                    db["actions"].append({"action_id": "ACT-" + uuid.uuid4().hex[:6].upper(), "case_id": r["case_id"],
-                                          "tier": r["tier"], "action": r["action"], "detail": r["detail"],
-                                          "executed_by": f"agent after approval by {decided_by}", "at": r["decided_at"]})
-                _save(db)
-                return r
-        return None
+        record = next((item for item in db["approvals"] if item["approval_id"] == approval_id), None)
+        if record is None or record["status"] != "PENDING":
+            return record
+        record.update(status="APPROVED" if approve else "REJECTED", decided_at=_now(), decided_by=decided_by)
+        case = db["cases"][record["case_id"]]
+        related = [item for item in db["approvals"] if item["case_id"] == record["case_id"]]
+        case["status"] = ("AWAITING_APPROVAL" if any(item["status"] == "PENDING" for item in related)
+            else "APPROVED" if any(item["status"] == "APPROVED" for item in related) else "REJECTED")
+        case["history"].append({"at": record["decided_at"], "event": f"{record['status']} by {decided_by}: {record['action']}"})
+        _save(db)
+        if approve:
+            log_action(record["case_id"], record["tier"], record["action"], record["detail"],
+                executed_by="simulation after approval by " + decided_by, idempotency_key="approval:" + approval_id)
+        return record

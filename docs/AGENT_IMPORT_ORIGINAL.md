@@ -1,3 +1,7 @@
+# Archived import text
+
+Historical notes from d01bdb3. Current setup and validation status are in the root README; claims below are not current certification.
+
 # Return Detective — ALDO × BSRM Retail Gen AI Hackathon 2026
 
 Every return is a clue. Three agents (Strands Agents SDK on Amazon Bedrock) read each return on the

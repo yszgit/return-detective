@@ -1,68 +1,74 @@
 # Return Detective
 
-ALDO / BSRM hackathon team workspace: detect a return pattern, investigate evidence, request approval, act through a retail tool, and verify the result.
+ALDO / BSRM hackathon: observe a return signal, investigate competing explanations, review proposals and compare later evidence.
 
-**Start here:** [Team workflow / 团队协作](docs/TEAM_WORKFLOW.md) · [AWS setup](docs/AWS_SETUP.md) · [Data contracts](docs/DATA_CONTRACTS.md) · [Architecture and delivery status](docs/ARCHITECTURE.md)
+[中文 GitHub 指南](docs/GITHUB_TEAM_GUIDE_ZH.md) · [协作流程](docs/TEAM_WORKFLOW.md) · [AWS setup](docs/AWS_SETUP.md) · [Data contracts](docs/DATA_CONTRACTS.md) · [Integration notes](docs/INTEGRATION.md)
 
-## Imported cleaned-data starter
+## One project, one shared package
 
-The `feature/data` branch imports the team's supplied `return_detective_starter`: DuckDB data access, statistical screening, agent tool definitions, a local case store, and cleaned Parquet datasets. Read [the import guide and known issues](docs/STARTER_IMPORT.md) before integrating these modules. The existing demo commands below still use the original synthetic fixtures in `data/sample/`.
+~~~text
+app.py                 Streamlit entry point
+run_demo.py            CLI entry point
+rd/                    agents, tools, data, detection, store, policy
+scripts/               connection check and data preparation
+aws/                   cloud resource and deployment work
+tests/                 shared-package and UI regression checks
+evaluation/            historical exports and methodology
+data/                  supplied Parquet dataset and data notes
+docs/                  setup and team documentation
+examples/legacy_demo/  isolated original synthetic demonstration
+~~~
 
-## Run without AWS
+## 本地启动 / Local setup
 
-Python 3.12 is the recommended shared development version. Run from the repository root:
+Use your existing Conda environment. Python 3.11 and 3.12 are the CI targets.
 
-```sh
-python -m return_detective.demo
+~~~powershell
+conda activate aldo-hackthon
+python -m pip install -r requirements.txt
+python scripts/check_aws.py --data-only
+python -m streamlit run app.py
+~~~
+
+Run from the repository root. Default backend: local DuckDB, reading `data/`. Configure `RD_DATA_DIR` for an approved alternative directory.
+
+**Preview evidence** runs a deterministic preview without a model call or case mutation. **Run AI investigation** uses Bedrock and requires your own valid AWS credentials, region and model ID.
+
+## Command-line preview
+
+~~~sh
+python run_demo.py isolated --offline
+python run_demo.py quality --offline
+python run_demo.py fit --offline
+~~~
+
+Remove `--offline` to use Bedrock. Custom records require both `--return-id` and `--as-of`. Local cases persist; `--reset-cases` explicitly clears the local store.
+
+## AWS configuration
+
+Copy `.env.example` to your local `.env`. Set `AWS_REGION` and `RD_MODEL_ID`. For Athena also set `RD_BACKEND=athena`, `RD_ATHENA_DB`, `RD_ATHENA_WORKGROUP` and, unless provided by the workgroup, `RD_ATHENA_OUTPUT`.
+
+Use your own Workshop credentials, including the temporary session token. Then run `python scripts/check_aws.py`. It verifies identity, reads the configured backend and makes one small Bedrock call. See [AWS setup](docs/AWS_SETUP.md).
+
+## Checks
+
+~~~sh
+python -m pip check
 python -m unittest discover -s tests -v
-```
+~~~
 
-These commands use only the Python standard library and synthetic fixtures. The demo is a deterministic starter, **not a live AI investigation**.
+CI installs dependencies and checks the shared package, replay dates, structured hand-offs, approvals, Athena adapter and Streamlit UI. Model/AWS calls are mocked. The supplied scenarios and original synthetic example are also checked.
 
-## Launch the interface
+## Prototype boundaries
 
-Windows PowerShell:
+- Retail actions are **simulations**. Approval does not prove that money, inventory or external messages changed.
+- Follow-up dates are local plans, with manual evidence comparison; no cloud scheduler is deployed.
+- JSON storage supports one application process. Runs serialize across replay dates. Shared persistence and authenticated approvers remain cloud work.
+- Sales aggregates lack dated order cohorts; sales-cohort return rates are unavailable.
+- Historical backtest exports used the earlier full-period baseline. Recompute them before presenting current performance or savings.
+- Supplied data provenance and fee-grain limits are documented in [data notes](data/README.md). The playbook is a team prototype policy.
+- Live Bedrock/Athena has not been certified by offline checks.
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m streamlit run app.py
-```
+## Team workflow
 
-macOS / Linux:
-
-```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m streamlit run app.py
-```
-
-The interface starts with local synthetic data and a clearly labeled in-memory inventory simulation. Set your own Workshop credentials, region, and `BEDROCK_MODEL_ID` to use its separate Bedrock investigation button. Live AWS access is not needed for the fixture demo.
-
-## Shared branches
-
-| Branch | Purpose | Main files |
-| --- | --- | --- |
-| `main` | Stable demo / presentation version | Integrated project |
-| `develop` | Team integration | Reviewed changes from work branches |
-| `feature/data` | Linked data, validation, cohort analysis | `data/`, `return_detective/data.py`, `scripts/` |
-| `feature/agent` | Strands tools, prompts, investigation loop | `return_detective/agent.py`, `prompts/` |
-| `feature/aws` | S3, DynamoDB, Lambda, IAM | `aws/`, `return_detective/check_aws.py` |
-| `feature/frontend` | Streamlit, evidence display, approvals | `app.py` |
-| `feature/evaluation` | Scenarios, baselines, tests, impact assumptions | `tests/`, `evaluation/`, `docs/` |
-
-Work on your branch, open a pull request **into `develop`**, and integrate the verified demo from `develop` into `main`. One person should coordinate changes to shared contracts and dependencies. These are team conventions; remote enforcement depends on the repository's available protection features.
-
-## What's implemented
-
-- Reproducible synthetic orders, returns, reviews, and inventory.
-- Sales denominators, a 30-day observation window, an as-of date, and an explicit minimum-evidence screen.
-- Local approval / hold / verification simulation with duplicate-execution protection.
-- Streamlit starter interface and optional read-only Strands / Bedrock investigation code.
-- AWS connection checker, task templates, PR template, and offline CI.
-
-## Team build work
-
-Live AWS connectivity must be verified in the competition account. S3 loading, DynamoDB persistence, Lambda execution, authenticated approvals, model evaluation, and production deployment remain team work. No savings, defect root cause, or deployed AWS capability is claimed by the starter.
-
-The original `data/sample/` fixtures are synthetic. The separate cleaned dataset in `data/*.parquet` was supplied in the team's local starter; its provenance is recorded in the import guide without assuming it is synthetic. Keep temporary AWS credentials and private raw inputs outside Git. Original competition PDFs remain outside this source repository.
+Work branches → PR into `develop` → integrated validation → PR into `main`. See [ownership](docs/TEAM_WORKFLOW.md). Keep shared business logic in `rd/`; the old demonstration is under `examples/legacy_demo/`.
