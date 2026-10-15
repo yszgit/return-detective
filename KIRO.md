@@ -5,6 +5,10 @@ Stack: Python 3.12, Strands Agents SDK, Amazon Bedrock, optional Athena over pri
 DuckDB local synthetic data, Streamlit UI. The supported app is at the repository root;
 legacy/starter preserves the earlier implementation.
 
+Agent code lives in rd/agents/: triage.py, investigator.py and response.py own the roles;
+shared.py owns model/trace helpers; pipeline.py coordinates them. Existing imports from
+rd.agents remain compatible. Keep the agents in one application process for this prototype.
+
 Rules for any code you write:
 1. Do not change the signatures or return JSON shape of functions in `rd/tools.py`; other team members depend on them.
 2. All SQL must run on both Athena (Trino) and DuckDB: no `::` casts, no DuckDB-only functions; compute dates in

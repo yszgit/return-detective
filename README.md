@@ -52,7 +52,11 @@ See the snapshot README for PowerShell settings and provenance. The application 
 ```text
 app.py                     Streamlit entry point
 run_demo.py                CLI entry point, live or --scripted
-rd/                        Agents, tools, detection, data access, local case store
+rd/                        Agent package, tools, detection, data access, local case store
+  agents/                  triage.py, investigator.py, response.py
+    pipeline.py            Sequential stage coordination
+    shared.py              Shared Bedrock configuration, trace hooks and result parsing
+    __init__.py            Compatible run_pipeline and model-checker imports
   config.py                .env loading and repository-relative paths
   scenarios.py             Shared CLI/UI scenario definitions
   policy/                  Response playbook and authority matrix

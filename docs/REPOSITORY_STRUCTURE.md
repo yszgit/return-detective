@@ -35,3 +35,18 @@ Previously the root contained an early standard-library starter while `agent_app
 - CI installs current dependencies, tests the active pipeline and runs scripted scenarios, as well as checking the archived starter.
 
 Detection thresholds, agent tool signatures, the playbook, and action authority rules are preserved. See `docs/ARCHITECTURE.md` for known prototype limitations.
+
+## Agent module split
+
+The former `rd/agents.py` is now the `rd/agents/` package:
+
+| Module | Responsibility |
+| --- | --- |
+| `triage.py` | Triage prompt, read-only screening tools and fast-model selection |
+| `investigator.py` | Investigator prompt, evidence tools and primary-model selection |
+| `response.py` | Response prompt, playbook/action tools and fast-model selection |
+| `shared.py` | Shared model construction, trace hooks and complete JSON object parsing |
+| `pipeline.py` | Sequential stage calls, handoffs, early exits and emitted decisions |
+| `__init__.py` | Existing public import compatibility |
+
+Existing CLI, UI and AWS checker imports continue to work. All three prompts, role tool lists and model-selection rules are preserved. Result parsing now keeps complete nested investigation JSON rather than accidentally extracting an inner hypothesis object. The agents still run in one application process; separate deployment is not part of this change.
