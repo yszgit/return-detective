@@ -1,0 +1,85 @@
+{
+  "dataset": "ALDO prepared returns snapshot, pseudonymized for the private team repository",
+  "source_archive": "return_detective_starter.zip",
+  "source_prefix": "return_detective/data/",
+  "synthetic": false,
+  "privacy": {
+    "customer_uid": "removed from returns",
+    "order_number": "same keyed HMAC-SHA256 token in returns and exchanges (128-bit hex prefix)",
+    "return_order_number": "keyed HMAC-SHA256 token in returns (128-bit hex prefix)",
+    "key": "kept locally outside the repository; not committed",
+    "limitations": "Not anonymous: real product names, dates and commercial metrics remain. Private team use only."
+  },
+  "tables": {
+    "returns": {
+      "file": "returns.parquet",
+      "rows": 649745,
+      "columns": [
+        "return_id",
+        "banner",
+        "order_number",
+        "sku",
+        "style",
+        "return_order_number",
+        "channel",
+        "return_date",
+        "status",
+        "refund",
+        "qty",
+        "raw_reason",
+        "store",
+        "category",
+        "restocking_fee",
+        "final_sale",
+        "aldo_fault"
+      ],
+      "bytes": 25813726,
+      "sha256": "6d2915ad2b39fb6119419fc3a854a4537471a307a449437122535e29d3f124be",
+      "source_sha256": "de6722317f243b3c5f3c3533d5e5b8778560cd1eb8a343cb5c67933ede51987b"
+    },
+    "sku_sales": {
+      "file": "sku_sales.parquet",
+      "rows": 64388,
+      "columns": [
+        "sku",
+        "lines_sold",
+        "final_sale_lines"
+      ],
+      "bytes": 516885,
+      "sha256": "cd539c20d5ea66be012d3f0f832b02f15e35f80ec6f411c799173f94bad150e7",
+      "source_sha256": "cd539c20d5ea66be012d3f0f832b02f15e35f80ec6f411c799173f94bad150e7"
+    },
+    "exchanges": {
+      "file": "exchanges.parquet",
+      "rows": 61934,
+      "columns": [
+        "confidence",
+        "exchange_date",
+        "order_number",
+        "exchange_sku",
+        "qty",
+        "store",
+        "sales"
+      ],
+      "bytes": 1445625,
+      "sha256": "c6636547b519d12c4aa00e3dd9a1f9d298842848a7992021bba1ed31031f4159",
+      "source_sha256": "e43142c9b1bf92a9ac6342bbbfc1dddd6eaa6066f881963eceb627dc0cf6d7bd"
+    },
+    "baseline": {
+      "file": "baseline.parquet",
+      "rows": 12,
+      "columns": [
+        "category",
+        "n",
+        "share"
+      ],
+      "bytes": 807,
+      "sha256": "370e38b776eb8c696521e2c8bd9a252793914ee186673d3697a9ce5a1f8d7984",
+      "source_sha256": "370e38b776eb8c696521e2c8bd9a252793914ee186673d3697a9ce5a1f8d7984"
+    }
+  },
+  "return_date_range": {
+    "from": "2024-02-04",
+    "through": "2026-01-31"
+  }
+}

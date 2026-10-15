@@ -37,6 +37,16 @@ python run_demo.py syn_quality
 
 For the Athena backend and ALDO scenarios (`isolated`, `quality`, `fit`), follow [AWS setup](docs/AWS_SETUP.md). Live runs require your own model access and may incur AWS charges. This branch's offline checks do not establish live AWS connectivity.
 
+The supplied cleaned ALDO snapshot is now included under [`data/cleaned/`](data/cleaned/README.md), with customer identifiers removed and order numbers tokenized. To run the real-data snapshot locally without AWS:
+
+```sh
+python scripts/validate_cleaned_data.py
+RD_BACKEND=duckdb RD_DATA_DIR=data/cleaned python run_demo.py quality --scripted
+RD_BACKEND=duckdb RD_DATA_DIR=data/cleaned python -m streamlit run app.py
+```
+
+See the snapshot README for PowerShell settings and provenance. The application continues to default to synthetic data unless `RD_DATA_DIR` is set explicitly.
+
 ## Repository layout
 
 ```text
@@ -49,7 +59,7 @@ rd/                        Agents, tools, detection, data access, local case sto
 scripts/                   Synthetic data, private data preparation, AWS check
 tests/                     Current synthetic pipeline and entry-point checks
 evaluation/                Backtest code and documented historical results
-data/README.md             Data policy; generated/private tables are ignored
+data/                      Selected cleaned snapshot; other private/generated tables ignored
 docs/                      Architecture, contracts, setup, migration and data decision
 aws/                       Cloud integration status
 legacy/                    Original starter and archived prototype materials
@@ -70,6 +80,6 @@ Tests generate temporary synthetic data and do not call AWS or Bedrock. The hist
 
 ## Data decision
 
-Commit **code, schemas, generators, tiny synthetic fixtures and documented aggregate results**. Keep raw ALDO CSVs, customer/order-level extracts, generated Parquet, credentials and runtime traces outside Git. The existing aggregate backtest is retained in this private repository with its provenance and limitations. Sharing it outside the team needs the data owner's permission. Details: [data assessment](docs/DATA_POLICY.md), [data contracts](docs/DATA_CONTRACTS.md).
+Commit **code, schemas, generators, tiny synthetic fixtures and documented aggregate results**. At the user's request, this private branch also includes the explicitly selected, pseudonymized prepared snapshot in `data/cleaned/`. Raw customer identifiers, original order numbers, raw inputs, other generated Parquet, credentials and runtime traces stay outside Git. Sharing commercial data outside the team needs the data owner's permission. Details: [data assessment](docs/DATA_POLICY.md), [data contracts](docs/DATA_CONTRACTS.md).
 
 Further reading: [architecture and limitations](docs/ARCHITECTURE.md) · [team workflow](docs/TEAM_WORKFLOW.md) · [legacy starter](legacy/README.md).

@@ -1,10 +1,11 @@
 # Local and private data
 
-No raw or generated tables are committed here. Choose a workflow:
+The explicitly selected, pseudonymized real-data snapshot is committed under [`cleaned/`](cleaned/README.md). Raw inputs and other generated/private tables remain ignored. Choose a workflow:
 
 | Workflow | Data location | How to prepare |
 | --- | --- | --- |
 | Default local demo | `data/synthetic/` (ignored) | `python scripts/generate_synthetic_data.py` |
+| Supplied prepared ALDO snapshot | `data/cleaned/` (committed, pseudonymized) | Set `RD_BACKEND=duckdb`, `RD_DATA_DIR=data/cleaned`; run `python scripts/validate_cleaned_data.py` |
 | Authorized real-data local analysis | `data/private/` (ignored) | `python scripts/prepare_data.py --oms <path> --flag <path> --fees <path> --exchanges <path>`; set `RD_DATA_DIR=data/private` |
 | Authorized cloud analysis | Private S3 / Glue / Athena | Set `RD_BACKEND=athena`, database and output prefix; see `docs/AWS_SETUP.md` |
 

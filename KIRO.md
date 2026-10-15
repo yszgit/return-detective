@@ -13,8 +13,10 @@ Rules for any code you write:
    (static baseline/sales tables, single-return lookup, global date) are documented in docs/DATA_CONTRACTS.md.
 4. Authority limits and approval gates live in code inside the action tools, never only in prompts.
 5. Never return `customer_uid` or other customer identifiers to a model.
-6. Real ALDO records must never be committed. data/private, data/raw, data/synthetic and runtime are ignored;
-   share real data through controlled private storage. See docs/DATA_POLICY.md.
+6. data/private, data/raw, data/synthetic and runtime remain ignored. At the user's request,
+   the explicitly selected, pseudonymized data/cleaned snapshot is included in this private branch.
+   Do not add customer identifiers, original order numbers or other raw/private datasets.
+   See docs/DATA_POLICY.md and data/cleaned/README.md.
 
 Open tasks:
 - UI (`app.py`, Streamlit) now has shared synthetic/ALDO scenarios, live and scripted modes, saved live

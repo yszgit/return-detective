@@ -11,7 +11,7 @@ The active application uses the four tables below through `rd/data.py`. Both Ath
 
 `return_id` is a generated integer row key. Recreating real input tables can change IDs if source ordering changes; named real-data scenarios depend on the original prepared snapshot. Amounts are interpreted as CAD by the prototype. Dates use the input calendar without timezone conversion. Nullable numeric values occur in synthetic background records.
 
-Private preparation also keeps `customer_uid` in `returns`. It is intentionally excluded from the tool column allowlist and is absent from synthetic files. Order/return IDs and case traces remain private business information even when customer IDs are omitted.
+Private preparation also keeps `customer_uid` in `returns`. It is intentionally excluded from the tool column allowlist and is absent from synthetic files. The selected committed `data/cleaned/` snapshot removes that column and consistently tokenizes order/return-order numbers; all analysis fields and generated return IDs are preserved. Order/return IDs and case traces remain private business information even when customer IDs are omitted. See `data/cleaned/README.md` and `manifest.json`.
 
 Categories and thresholds are defined in `rd/detect.py`; the default screen uses 28 days. It compares the **category share among returns**, not a population defect rate. The optional SKU return-rate tool uses a separate sales denominator and is only illustrative because that table lacks dated order lines.
 

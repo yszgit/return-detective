@@ -16,7 +16,7 @@ The synthetic generator and `tests/test_synthetic_pipeline.py` verify seeded beh
 
 ## Limits of historical results
 
-- Private source inputs are not committed; their counts and the inherited headline figures have not been independently reproduced here.
+- A prepared pseudonymized snapshot is now included in `data/cleaned/`; original raw inputs are not committed. Set `RD_DATA_DIR=data/cleaned` to analyze it. Adding the snapshot does not itself validate inherited business claims.
 - Baseline category shares are computed from the full input history; SKU sales have no event dates. The present evaluation is retrospective and can leak future information. Use prior-period/as-of baselines and dated denominators before claiming unbiased early detection.
 - `sustained_next_28d` is a persistence proxy, not verified true/false root-cause labels. Near the end of the dataset the follow-up window can be incomplete.
 - The monthly baseline may flag before the daily screen on some cases. Compare aligned windows and denominators and report negative lead times too.
