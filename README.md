@@ -2,7 +2,7 @@
 
 ALDO / BSRM hackathon team workspace: detect a return pattern, investigate evidence, request approval, act through a retail tool, and verify the result.
 
-**Start here:** [Team workflow / 团队协作](docs/TEAM_WORKFLOW.md) · [AWS setup](docs/AWS_SETUP.md) · [Data contracts](docs/DATA_CONTRACTS.md) · [Architecture and delivery status](docs/ARCHITECTURE.md)
+**Start here:** [Team workflow](docs/TEAM_WORKFLOW.md) · [AWS setup](docs/AWS_SETUP.md) · [Data contracts](docs/DATA_CONTRACTS.md) · [Architecture and delivery status](docs/ARCHITECTURE.md)
 
 ## Run without A
 
