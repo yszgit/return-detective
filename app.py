@@ -10,6 +10,7 @@ import html
 import json
 import os
 import queue
+import re
 import threading
 import time
 
@@ -298,7 +299,8 @@ def render_event(e, box):
         elif kind == "thought":
             st.markdown(f'<div class="rd-agent"><span class="n">{num}</span><span class="t">{html.escape(short)}</span></div>',
                         unsafe_allow_html=True)
-            st.markdown(clean(e["text"]))
+            # Display only: drop a trailing JSON block (starts at a line beginning with "{"); the decision card shows it.
+            st.markdown(re.sub(r"^\{.*\Z", "", clean(e["text"]), flags=re.M | re.S).rstrip())
         elif kind == "tool_result":
             inp = e.get("input")
             label = f"{num} · {short} · `{e['tool']}`" if num else f"{short} · `{e['tool']}`"
