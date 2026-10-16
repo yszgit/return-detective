@@ -50,6 +50,31 @@ def _detail(value):
     return str(value or '')
 
 
+def _notification_status(case):
+    note = case.get('case_notification') or {}
+    if note.get('status') == 'ACCEPTED':
+        st.caption('Owner notification: accepted by SNS. Inbox delivery is not confirmed.')
+    elif note.get('status') in ('UNCONFIRMED', 'PUBLISHING'):
+        st.warning('Case saved. Notification delivery is unconfirmed; check the inbox before retrying.')
+    elif note.get('status') == 'NOT_CONFIGURED':
+        st.caption('Case saved. SNS notification is not configured.')
+    elif case.get('investigation_mode') == 'scripted':
+        st.caption('Scripted investigation: no real notification was sent.')
+    else:
+        st.caption('No owner notification recorded for this case.')
+    if note.get('status') in ('UNCONFIRMED', 'NOT_CONFIGURED') and not _recorded():
+        with st.expander('Notification details'):
+            if note.get('error'):
+                st.caption(note['error'])
+            st.caption('Retrying an unconfirmed publish may send a duplicate email.')
+            if st.button('Retry owner notification', key='notify_' + case['case_id'],
+                         disabled=not os.environ.get('RD_SNS_TOPIC_ARN')):
+                from .notifications import notify_case
+                with workflow.exclusive_run():
+                    notify_case(case['case_id'], retry=True)
+                st.rerun()
+
+
 @st.cache_data(ttl=600, show_spinner=False)
 def _coverage(key):
     return workflow.coverage()
@@ -449,6 +474,7 @@ def case_workspace(snapshot, scripted, render_event, pair_tool_calls):
         with st.container(border=True):
             st.markdown('### Who should do what')
             st.write(f"**Owner:** {case.get('owner_team') or 'Not assigned'}")
+            _notification_status(case)
             pending = [a for a in snapshot['approvals'] if a['case_id'] == cid and a['status'] == 'PENDING']
             for approval in pending:
                 st.markdown(f"**{approval['action']}**")
@@ -462,7 +488,7 @@ def case_workspace(snapshot, scripted, render_event, pair_tool_calls):
                 st.rerun()
         st.markdown('#### Evidence still needed')
         st.write('Product inspection, batch and supplier records, and verified sales coverage are needed to establish a specific cause or population return rate.')
-        st.caption('Notifications and retail actions in this prototype are recorded simulations.')
+        st.caption('Retail actions remain simulated. Optional SNS alerts notify the subscribed team; the case owner name does not select email recipients.')
         if case.get('workflow_error'):
             st.warning('The previous investigation was interrupted. Recorded case history is preserved.')
             blocked = _investigation_blocked(True, scripted)
@@ -659,6 +685,8 @@ def render_workspace(render_event, pair_tool_calls, supporting_analysis):
         if bounds.get('last_date'):
             st.caption(f"Snapshot covers {bounds['first_date']} to {bounds['last_date']}")
         st.caption('This prototype records proposed and simulated actions.')
+        st.caption('SNS case alerts: configured for live investigations' if os.environ.get('RD_SNS_TOPIC_ARN')
+                   else 'SNS case alerts: not configured')
     if connection_error:
         st.error('The configured data or case store could not be reached. Check the connection before processing returns.')
         with st.expander('Connection details'):

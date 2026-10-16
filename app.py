@@ -361,7 +361,7 @@ def impact_tab():
 def architecture_tab():
     st.markdown('<div class="rd-h" style="margin-top:0">Built on AWS</div>'
                 '<div class="rd-h-sub">Services and their role in Return Detective</div>', unsafe_allow_html=True)
-    st.caption("Retail actions, notifications and verification schedules are local simulations. No production retail system is connected.")
+    st.caption("Retail actions remain simulated and verification checks are manually triggered. Optional SNS case alerts run after successful live UI investigations; no production retail system is connected.")
     case_storage = "Amazon DynamoDB" if store.STORE_BACKEND == "dynamodb" else "Local JSON"
     st.markdown(f"""
 | Layer | AWS service | Role in Return Detective |
@@ -372,7 +372,7 @@ def architecture_tab():
 | Policy | Playbook document read by the agents | Root-cause classes, confidence levels, authority matrix |
 | Guardrails | Tool authority checks; optional Bedrock Guardrail | Prototype fee authority and approvals for stock holds, claims and outreach |
 | Case memory | **{case_storage}** | Cases, simulated actions, approval queue and audit trail |
-| Notifications | **Local simulation**; SNS planned | Record owner notifications and approval proposals |
+| Notifications | **Optional Amazon SNS** for live UI case alerts | Notify the subscribed team after a successful investigation; other action notifications remain simulated |
 | Verification | Due dates and checks triggered from UI/CLI | Reopen persistent signals; give prior evidence to Investigator; close observed normal cases |
 | Build | **Kiro** | AI IDE used to build the prototype |
 """)

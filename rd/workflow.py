@@ -217,17 +217,27 @@ def investigate_signal(candidate, as_of, emit, *, scripted=False):
                           investigation_briefing=result.get('briefing'),
                           assessment_as_of=as_of,
                           investigation_mode='scripted' if scripted else 'bedrock')
+        from .notifications import notify_case
+        notification = notify_case(case['case_id'], scripted=scripted)
+        emit({'agent': 'System', 'type': 'notification', 'data': notification})
         return {'case_id': case['case_id'], 'outcome': 'INVESTIGATED', **result}
 
 
 def run_example(return_id, as_of, emit, *, scripted=False):
     with exclusive_run():
-        require_forward_date(as_of, store.snapshot()['cases'].values())
+        before = store.snapshot()['cases']
+        require_forward_date(as_of, before.values())
         if scripted:
             from .offline import run_scripted as run
         else:
             from .agents import run_pipeline as run
-        return run(return_id, as_of, emit)
+        result = run(return_id, as_of, emit)
+        from .notifications import notify_case
+        for cid in store.snapshot()['cases']:
+            if cid not in before:
+                emit({'agent': 'System', 'type': 'notification',
+                      'data': notify_case(cid, scripted=scripted)})
+        return result
 
 
 def review_case(case_id, as_of, emit, *, scripted=False, retry_review=False):

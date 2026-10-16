@@ -89,6 +89,25 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'separate workspace'):
             self.workflow.process_day('2026-01-29')
 
+    def test_live_case_alert_fires_after_save_and_not_on_attachment(self):
+        from rd import offline
+        report = self.workflow.process_day('2026-01-30')
+        candidate = next(c for c in report['candidates'] if c['category'] == 'Quality')
+        def fake_agents(style, category, as_of, emit, note, **kwargs):
+            return offline.investigate_scripted(style, category, emit)
+        def notify(cid, **kwargs):
+            case = self.store.get_case(cid)
+            self.assertTrue(case['screen_evidence'])
+            self.assertEqual(case['investigation_mode'], 'bedrock')
+            return {'status': 'ACCEPTED'}
+        with patch('rd.agents.pipeline.investigate_and_respond', side_effect=fake_agents), \
+             patch('rd.notifications.notify_case', side_effect=notify) as alert:
+            result = self.workflow.investigate_signal(candidate, report['as_of'], lambda e: None)
+            alert.assert_called_once_with(result['case_id'], scripted=False)
+            again = self.workflow.investigate_signal(candidate, report['as_of'], lambda e: None)
+            self.assertEqual(again['outcome'], 'ATTACHED_TO_CASE')
+            self.assertEqual(alert.call_count, 1)
+
     def test_failed_partial_case_can_be_retried_without_duplicates(self):
         report = self.workflow.process_day('2026-01-30')
         candidate = next(c for c in report['candidates'] if c['category'] == 'Quality')

@@ -89,7 +89,7 @@ for the evidence, rehearsal sequence and remaining evaluation limits.
 - RD_FAST_MODEL_ID optionally selects another model for Triage and Response. If unset, they use RD_MODEL_ID too.
 - Daily screening makes zero model calls. Selecting an anomaly starts the existing Investigator and Response. Prepared single-return examples retain the Triage → Investigator → Response pipeline.
 - An agent may make several model requests while using tools. Historical signal counts are not measured daily model-call counts or costs.
-- Cases, actions and approvals use local JSON by default; `RD_STORE_BACKEND=dynamodb` persists the same demo records in the configured DynamoDB store. SNS and real retail execution remain unimplemented.
+- Cases, actions and approvals use local JSON by default; `RD_STORE_BACKEND=dynamodb` persists the same demo records in the configured DynamoDB store. Optional SNS case alerts are available for live UI investigations; real retail execution remains simulated. See [SNS setup](aws/SNS.md).
 
 ## Verification
 
