@@ -111,6 +111,22 @@ refunds, stock holds, supplier claims and outreach remain proposed or simulated
 records, with existing code-level authority gates. No scheduler or live retail
 integration is introduced by this UI change.
 
+## Clear a demo workspace
+
+The left sidebar has **Delete saved cases**. It shows the current namespace and
+counts of cases, approvals and actions. Select **Clear all records listed above**,
+then **Back up and delete**. The app saves and verifies a local backup before
+clearing only the configured case store namespace. It also clears that workspace's
+saved daily reports so deleted case links cannot linger. Source datasets, other
+namespaces and recorded tool traces are preserved.
+
+Backups stay under ignored `runtime/<workspace>/backups/<source-key>/` (or the
+configured runtime directory). **Download latest backup** exports the latest
+backup. **Restore latest backup** restores the case store and day reports only
+while the workspace is empty; it refuses another namespace or configuration.
+Deletion and restoration are disabled in recorded read-only mode. These controls
+are intended for the single-process demo, not concurrent production administration.
+
 ## Checks
 
 `tests/test_workflow.py` covers grouped-policy equivalence, bounded query count,

@@ -640,7 +640,62 @@ def approvals_and_followup(snapshot, scripted, render_event, pair_tool_calls):
     _technical(render_event, pair_tool_calls, case)
 
 
+def _reset_workspace_view(message):
+    st.session_state.workspace_reset_pending = True
+    st.session_state.workspace_revision = st.session_state.get('workspace_revision', 0) + 1
+    st.session_state.next_page = PAGES[0]
+    st.session_state.notice = message
+    _coverage.clear()
+    st.rerun()
+
+
+def _workspace_data_controls(snapshot, available):
+    from . import workspace_state
+    with st.expander('Delete saved cases', expanded=False):
+        totals = workspace_state.counts(snapshot)
+        st.caption('Current workspace: ' + (store._NAMESPACE or 'local'))
+        st.write(f"{totals['cases']} cases · {totals['approvals']} approvals · {totals['actions']} action records")
+        st.caption('Clears this workspace’s saved cases, approvals, actions and daily screening reports. '
+                   'Source return data and other workspaces are preserved. A local backup is saved first.')
+        blocked = not available or _recorded()
+        confirmation = st.checkbox('Clear all records listed above',
+                                   key=f"delete_confirmation_{st.session_state.get('workspace_revision', 0)}", disabled=blocked)
+        if st.button('Back up and delete', key='clear_workspace', width='stretch',
+                     disabled=blocked or not confirmation or not any(totals.values())):
+            try:
+                with st.spinner('Backing up and clearing this workspace...'):
+                    result = workspace_state.clear_saved_cases()
+            except Exception as exc:
+                st.error('Could not finish clearing the workspace: ' + str(exc))
+            else:
+                deleted = result['deleted']
+                _reset_workspace_view(f"Deleted {deleted['cases']} cases, {deleted['approvals']} approvals and "
+                                      f"{deleted['actions']} action records. Backup saved; restore is available in the left sidebar.")
+        backup = workspace_state.latest_backup()
+        if backup:
+            st.caption('Latest backup: ' + backup.name)
+            st.download_button('Download latest backup', backup.read_bytes(), file_name=backup.name,
+                               mime='application/json', width='stretch')
+            if st.button('Restore latest backup', key='restore_workspace', width='stretch',
+                         disabled=blocked or any(totals.values())):
+                try:
+                    with st.spinner('Restoring this workspace...'):
+                        workspace_state.restore_backup(backup)
+                except Exception as exc:
+                    st.error('Could not restore the backup: ' + str(exc))
+                else:
+                    _reset_workspace_view('Workspace restored from the latest backup. Historical date limits apply again.')
+            st.caption('Restore is available while this workspace is empty.')
+        if _recorded():
+            st.caption('Recorded rehearsal is read-only. Deletion and restoration are disabled.')
+
+
 def render_workspace(render_event, pair_tool_calls, supporting_analysis):
+    if st.session_state.pop('workspace_reset_pending', False):
+        for key in list(st.session_state):
+            if key in ('selected_case_id', 'last_trace', 'replay_date') or key.startswith(('case_picker_', 'delete_confirmation_')):
+                del st.session_state[key]
+        st.session_state.events = []
     st.session_state.setdefault('events', [])
     st.markdown('<div class="rd-bar">ALDO · RETURNS INTELLIGENCE · HISTORICAL REPLAY</div>'
                 '<div class="rd-mast"><div class="rd-wordmark">Return Detective</div></div>', unsafe_allow_html=True)
@@ -658,6 +713,7 @@ def render_workspace(render_event, pair_tool_calls, supporting_analysis):
     with st.sidebar:
         st.markdown('### Return operations')
         page = st.radio('Workspace', PAGES, label_visibility='collapsed', key='workspace_page')
+        _workspace_data_controls(snapshot, available)
         minimum = dt.date.fromisoformat(bounds['first_date']) if bounds.get('first_date') else None
         maximum = dt.date.fromisoformat(bounds['last_date']) if bounds.get('last_date') else None
         default = dt.date(2026, 1, 31) if is_synthetic() else dt.date(2024, 11, 23)

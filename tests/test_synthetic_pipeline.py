@@ -223,7 +223,7 @@ else:
     app.run()
     assert not app.exception, [e.message for e in app.exception]
     assert next(s for s in app.selectbox if s.label == 'Investigation mode').disabled
-    assert all(b.disabled for b in app.button if b.label in ('Approve proposal', 'Reject proposal', 'Check outcome', 'Save review plan'))
+    assert all(b.disabled for b in app.button if b.label in ('Approve proposal', 'Reject proposal', 'Check outcome', 'Save review plan', 'Back up and delete', 'Restore latest backup'))
     next(r for r in app.radio if r.label == 'Workspace').set_value('Returns monitor').run()
     assert next(b for b in app.button if b.label == "Process day's returns").disabled
     assert all(b.disabled for b in app.button if b.label == 'Start investigation')
@@ -235,13 +235,27 @@ else:
         assert not app.exception, [e.message for e in app.exception]
         assert not any(b.label == 'Start investigation' for b in app.button)
         assert any('Current case links' in message.value for message in app.warning)
+    app.run()
+    before_clear = store.snapshot()
+    assert next(b for b in app.button if b.label == 'Back up and delete').disabled
+    next(c for c in app.checkbox if c.label == 'Clear all records listed above').check().run()
+    next(b for b in app.button if b.label == 'Back up and delete').click().run(timeout=30)
+    assert not app.exception, [e.message for e in app.exception]
+    assert store.snapshot() == {'cases': {}, 'actions': [], 'approvals': []}
+    assert not next(c for c in app.checkbox if c.label == 'Clear all records listed above').value
+    assert any('Deleted 2 cases' in item.value for item in app.success)
+    assert next(b for b in app.button if b.label == 'Back up and delete').disabled
+    next(b for b in app.button if b.label == 'Restore latest backup').click().run(timeout=30)
+    assert not app.exception, [e.message for e in app.exception]
+    assert store.snapshot() == before_clear
+    assert next(b for b in app.button if b.label == 'Restore latest backup').disabled
 '''
         for missing in (True, False):
             with self.subTest(missing_data=missing):
                 env = dict(os.environ, RD_TEST_APP=os.path.abspath(os.path.join(APP, "app.py")),
                            RD_TEST_MISSING="1" if missing else "0",
                            RD_MODEL_ID='', RD_FAST_MODEL_ID='', RD_STORE_BACKEND='json',
-                           RD_DATASET_VERSION='1',
+                           RD_DATASET_VERSION='1', RD_SNS_TOPIC_ARN='',
                            RD_DATA_DIR=os.path.join(self.data_dir, "missing") if missing else self.data_dir,
                            RD_RUNTIME_DIR=os.path.join(self.data_dir, "ui-runtime"))
                 result = subprocess.run([sys.executable, "-c", code], env=env,
