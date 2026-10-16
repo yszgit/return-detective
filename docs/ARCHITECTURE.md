@@ -35,7 +35,6 @@ The shared configuration and scenarios now live in `rd/config.py` and `rd/scenar
 - The CLI offers `--scripted`; the UI identifies this mode as having no LLM.
 - Dated checks preserve cases, reject missing/sparse follow-up, reopen persistent signals and close observed normal signals. The prepared quality replay exercises both outcomes in isolated storage.
 - `evaluation/compare_agents.py` compares the same six seeded cases using fixed tools or real Bedrock agents. SDK usage is captured when supplied; live-agent results require an actual live run.
-- The early starter's simulation and tests remain runnable in `legacy/starter/`.
 
 ## Prototype boundaries
 

@@ -15,7 +15,21 @@ import duckdb
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from scripts.prepare_data import CATEGORY_SQL
+CATEGORY_SQL = r"""
+case
+ when r0 in ('too big','trop grand') then 'Fit: too big'
+ when r0 in ('too small','trop petit') then 'Fit: too small'
+ when r0 in ('uncomfortable','inconfortable') then 'Fit: uncomfortable'
+ when r0 in ('defective','poor quality','manufacturer defect','warranty') then 'Quality'
+ when r0 like 'arriv%poor cond%' or r0 like 'arriv% en mauvais%' then 'Damaged in transit'
+ when r0 in ('wrong item','wrong item delivered','wrong size delivered','missing item') then 'Fulfilment error'
+ when r0 in ('lost in transit','arrived too late','return to sender') then 'Delivery failure'
+ when r0 in ('return without merchandise','return without merch') then 'No merchandise'
+ when r0 like 'not what i expected%' or r0 like 'ne r%pond pas%' or r0 in ('not as advertised','not satisfied with the colour') then 'Expectation gap'
+ when r0 like 'changed%' or r0 like 'j''ai chang%' or r0 in ('found something else','gift return') then 'Preference'
+ when r0 like 'return extension%' or r0='in-store return' then 'Admin'
+ else 'Unknown' end
+"""
 
 SOURCE_FILES = {
     'oms': 'OMS Data_Feb24-Jan26_new.csv',

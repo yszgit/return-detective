@@ -366,4 +366,3 @@ INVESTIGATOR_TOOLS = [style_reason_mix, weekly_timeline, spread_analysis, sample
 RESPONSE_TOOLS = [read_playbook, read_case, open_case, record_findings, notify_owner_team, waive_restocking_fees,
                   request_fit_guidance_update, request_stock_hold, draft_supplier_claim, request_proactive_outreach,
                   schedule_verification]
-VERIFY_TOOLS = [verify_case, weekly_timeline]

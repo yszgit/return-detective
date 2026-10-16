@@ -1,9 +1,0 @@
-data/
-*.csv
-*.parquet
-*.duckdb
-runtime/
-.env
-__pycache__/
-.venv/
-!evaluation/cases_backtest.csv

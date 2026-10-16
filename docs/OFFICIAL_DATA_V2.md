@@ -23,7 +23,7 @@ python scripts/validate_official_data.py --data-dir '/private/output/aldo-v2'
 
 When no legacy release is supplied, IDs are the immutable source row positions. With the published v1/v2 snapshot, IDs must map exactly or the build fails. File-based IDs are stable within the immutable source version, not a claim of a universal source-system event identifier. An updated source file needs an explicit migration.
 
-`scripts/prepare_data.py` remains the limited legacy four-table preparation tool; do not use it to regenerate v2.
+`scripts/prepare_official_data.py` is the supported real-data builder and owns the return-category normalization rules. Synthetic four-table fixtures use `scripts/generate_synthetic_data.py`.
 
 ## Acceptance
 

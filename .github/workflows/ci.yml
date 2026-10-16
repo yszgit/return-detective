@@ -21,7 +21,7 @@ jobs:
       - name: Install current application dependencies
         run: python -m pip install -r requirements.txt
       - name: Validate Python source
-        run: python -m compileall -q rd app.py run_demo.py scripts tests evaluation legacy
+        run: python -m compileall -q rd app.py run_demo.py scripts tests evaluation
       - name: Validate complete official cleaned snapshot
         run: python scripts/validate_cleaned_data.py
       - name: Validate current data, tools, approvals and entry points
@@ -43,8 +43,3 @@ jobs:
           python run_demo.py syn_quality --scripted
           python run_demo.py syn_fit --scripted
           python run_demo.py syn_damage --scripted
-      - name: Verify preserved starter
-        working-directory: legacy/starter
-        run: |
-          python -m unittest discover -s tests -v
-          python -m return_detective.demo

@@ -1,56 +1,44 @@
-# Structure and migration
+# Current repository structure
 
-Source: `feature/agent` commit `f8008f00a88a6cbc4038d02641ee50ce2d398aa3`. Destination: the separate `agent` branch. The source branch and other team branches are unchanged.
+The supported application on `agent` runs from the repository root.
 
-Previously the root contained an early standard-library starter while `agent_app/` contained a second, more complete implementation, a second dependency file, a second UI and a second set of tests. Root CI tested only the early starter. The root README therefore did not describe the full agent application.
+```text
+app.py                         Streamlit UI: investigation, approvals, verification and evaluation
+run_demo.py                    CLI: incoming return or existing-case verification
+rd/
+  agents/
+    triage.py                  Incoming-return decision and screening tools
+    investigator.py            Competing hypotheses and evidence tools
+    response.py                Playbook, actions and human approval requests
+    pipeline.py                Initial investigation and reopened-case coordination
+    shared.py                  Bedrock configuration, trace hooks, token/cycle metrics and JSON parsing
+    __init__.py                Public imports used by the UI, CLI, checks and tests
+  config.py                    Environment settings and repository-relative paths
+  data.py                      DuckDB/Athena data access
+  detect.py                    Statistical signal rules
+  tools.py                     Evidence tools and enforced action authority
+  store.py                     JSON or optional DynamoDB demo state
+  offline.py                   Fixed-tool baseline without a language model
+  verification.py              Due dates, outcome checks and case reopening/closing
+  scenarios.py                 Shared UI/CLI scenarios
+  policy/response_playbook.md   Operating policy and approval tiers
+scripts/                       Data generation, official v2 build/validation and AWS setup/checks
+aws/                           Storage stack and Athena schema template
+evaluation/                    Chronological replay, rule/agent comparison and aggregate results
+tests/                         Current application regression tests
+data/cleaned/                  Authorized, pseudonymized official v2 release
+runtime/                       Ignored cases, traces and newly generated evaluation output
+docs/                          Architecture, contracts, setup, team workflow and demo guide
+.github/workflows/ci.yml        Current source, data and offline scenario checks
+```
 
-## Path map
+Synthetic fixtures and v1 compatibility use four tables; the official v2 release
+uses nine. See [data contracts](DATA_CONTRACTS.md) and [v2 preparation/AWS guide](OFFICIAL_DATA_V2.md).
 
-| Previous path | Current path |
-| --- | --- |
-| `agent_app/app.py`, `agent_app/run_demo.py` | `app.py`, `run_demo.py` |
-| `agent_app/rd/` | `rd/` |
-| `agent_app/scripts/` | `scripts/` |
-| `agent_app/tests/` | `tests/` |
-| `agent_app/.streamlit/` | `.streamlit/` |
-| `agent_app/KIRO.md` | `KIRO.md` (paths/configuration updated) |
-| `agent_app/requirements.txt` | `requirements.txt` (all current direct dependencies) |
-| `agent_app/evaluation/backtest.py` | `evaluation/backtest.py` |
-| `agent_app/evaluation/cases_backtest.csv` | `evaluation/results/cases_backtest.csv` (unchanged contents) |
-| `agent_app/evaluation/backtest_original.py` | `legacy/backtest_original.py` (historical, machine-specific) |
-| `agent_app/README.md`, `.gitignore` | `legacy/agent_app_README.md`, `legacy/agent_app.gitignore` |
-| Original root `app.py`, `return_detective/`, `scripts/`, `tests/` | Same relative paths under `legacy/starter/` |
-| Original root `data/`, `evaluation/`, `prompts/`, `aws/` | Same relative paths under `legacy/starter/` |
-| Original root README, requirements, env template, architecture/setup/contracts | Preserved under `legacy/starter/` |
+The old starter, machine-specific backtest and historical planning report were
+removed from the active tree. They remain recoverable in Git history through
+commit `1859ce4`. Current entry points do not depend on those files.
 
-## Behavior needed for the consolidated entry point
-
-- Run everything from the root; do not `cd agent_app`.
-- Shared `rd/config.py` resolves data/runtime paths independently of the working directory and loads root `.env` without overriding terminal settings.
-- DuckDB with `data/synthetic/` is the default. Athena now requires explicit `RD_BACKEND=athena` and `RD_ATHENA_OUTPUT`; no account-specific bucket is hardcoded.
-- Raw-data preparation defaults to `data/private/`; synthetic generation defaults to `data/synthetic/`.
-- CLI and UI share `rd/scenarios.py`. CLI `--scripted` makes the local demo usable without a model. Mismatched named scenarios/datasets are rejected.
-- The UI opens without local data and provides setup guidance. Synthetic runs do not display historical ALDO impact figures.
-- New backtest runs write into ignored `runtime/evaluation/`; the historical committed result is not overwritten by default.
-- CI installs current dependencies, tests the active pipeline and runs scripted scenarios, as well as checking the archived starter.
-
-Detection thresholds, agent tool signatures, the playbook, and action authority rules are preserved. See `docs/ARCHITECTURE.md` for known prototype limitations.
-
-## Agent module split
-
-The former `rd/agents.py` is now the `rd/agents/` package:
-
-| Module | Responsibility |
-| --- | --- |
-| `triage.py` | Triage prompt, read-only screening tools and fast-model selection |
-| `investigator.py` | Investigator prompt, evidence tools and primary-model selection |
-| `response.py` | Response prompt, playbook/action tools and fast-model selection |
-| `shared.py` | Shared model construction, trace hooks and complete JSON object parsing |
-| `pipeline.py` | Sequential stage calls, handoffs, early exits and emitted decisions |
-| `__init__.py` | Existing public import compatibility |
-
-Existing CLI, UI and AWS checker imports continue to work. All three prompts, role tool lists and model-selection rules are preserved. Result parsing now keeps complete nested investigation JSON rather than accidentally extracting an inner hypothesis object. The agents still run in one application process; separate deployment is not part of this change.
-
-## Complete official data v2
-
-The subsequent v2 release supersedes the old four-table data assumptions. It adds `scripts/prepare_official_data.py`, `scripts/validate_official_data.py`, `scripts/export_aws_dataset.py`, nine complete analytical tables, monthly transaction shards and `evaluation/chronological.py`. Current evidence tools use dated history, expose exchange/transaction context and withhold undated financial/status outcomes from historical decisions. [Current contracts](DATA_CONTRACTS.md) and [v2 handoff](OFFICIAL_DATA_V2.md) are authoritative; the original four-table contract is archived as `DATA_CONTRACTS_V1.md`.
+The three agents remain separate roles in one application process. The
+[architecture](ARCHITECTURE.md) and [verification guide](VERIFICATION_DEMO.md)
+describe implemented behavior and prototype limits.

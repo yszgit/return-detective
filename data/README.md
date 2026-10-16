@@ -1,20 +1,17 @@
-# Local and private data
+# Data workflows
 
-The explicitly selected, pseudonymized real-data snapshot is committed under [`cleaned/`](cleaned/README.md). Raw inputs and other generated/private tables remain ignored. Choose a workflow:
+The active real-data release is the authorized, pseudonymized official **v2**
+snapshot under [cleaned/](cleaned/README.md). Its manifest and quality report define
+nine analytical tables covering all six supplied business CSVs.
 
-The active real-data release is now complete official **v2**, with nine tables and all six CSV sources. Use [the current builder and AWS handoff](../docs/OFFICIAL_DATA_V2.md); the four-table preparation examples below are legacy workflows. The manifest and quality report define the active release.
-
-| Workflow | Data location | How to prepare |
+| Workflow | Location | Entry point |
 | --- | --- | --- |
-| Default local demo | `data/synthetic/` (ignored) | `python scripts/generate_synthetic_data.py` |
-| Supplied prepared ALDO snapshot | `data/cleaned/` (committed, pseudonymized) | Set `RD_BACKEND=duckdb`, `RD_DATA_DIR=data/cleaned`; run `python scripts/validate_cleaned_data.py` |
-| Authorized real-data local analysis | `data/private/` (ignored) | `python scripts/prepare_data.py --oms <path> --flag <path> --fees <path> --exchanges <path>`; set `RD_DATA_DIR=data/private` |
-| Authorized cloud analysis | Private S3 / Glue / Athena | Set `RD_BACKEND=athena`, database and output prefix; see `docs/AWS_SETUP.md` |
+| Default synthetic demo | `data/synthetic/` (ignored) | `python scripts/generate_synthetic_data.py` |
+| Supplied official v2 snapshot | `data/cleaned/` (committed) | `python scripts/validate_cleaned_data.py` |
+| Rebuild from authorized raw inputs | New private output directory outside Git | `scripts/prepare_official_data.py`; follow the [v2 guide](../docs/OFFICIAL_DATA_V2.md) |
+| Cloud historical data | Private S3 + Glue + Athena | `scripts/export_aws_dataset.py` and the [AWS setup guide](../docs/AWS_SETUP.md) |
 
-Both generators write `returns.parquet`, `sku_sales.parquet`, `exchanges.parquet` and `baseline.parquet`. The synthetic generator adds `_SYNTHETIC.txt` so the UI and CLI can identify the dataset. Do not remove that marker or copy it onto private data.
-
-Synthetic seed: `20260131`; fixed scenario snapshot: `2026-01-31`. Styles use `SYNTH-`, SKUs use `SYN-`, and no customer identifier column is generated. The generator includes quality, fit, transit-damage and negative-control cases, plus messy ordinary records. This tests the prototype; it does not measure actual business performance.
-
-The earlier tiny CSV fixtures are preserved at `legacy/starter/data/sample/`. They use a different schema and are only for that starter.
-
-See [current schemas](../docs/DATA_CONTRACTS.md) and [the data assessment](../docs/DATA_POLICY.md).
+Select local data with `RD_BACKEND=duckdb` and `RD_DATA_DIR=<chosen-directory>`.
+Synthetic generation never writes to the official cleaned release. Keep original
+CSV files, HMAC keys, working databases and other private/generated data outside
+Git. See [data policy](../docs/DATA_POLICY.md) for the selected release exception.

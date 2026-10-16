@@ -9,9 +9,8 @@ At the user's explicit subsequent request to completely clean the official datas
 | Item | Git decision | Reason / alternative |
 | --- | --- | --- |
 | Schemas, category normalization, generation/preparation code, fixed seed, scenario IDs | Commit | Enough to recreate and understand the local demo |
-| Tiny, visibly synthetic starter CSVs | Retain under `legacy/starter/data/sample/` | Existing fixtures, about 37 KB total, no real customer records |
 | Current synthetic Parquet | Generate locally; ignore | Reproducible from one command; avoids binary churn and confusion with real data |
-| Raw ALDO CSVs and customer/order-level derived data | Do not add | `prepare_data.py` preserves `customer_uid` in the private return table; tools omit that column, but the stored file is still sensitive |
+| Raw ALDO CSVs and customer/order-level derived data | Do not add | Use the v2 builder's privacy transformations; raw identifiers and working databases stay outside Git |
 | Complete official v2 snapshot | Include explicitly allowlisted v2 tables/shards and metadata under `data/cleaned/` | User-requested private release; identifiers removed/tokenized; still private commercial data |
 | Other real prepared Parquet / DuckDB databases | Do not add by default | Use private S3 with team access or ignored `data/private/` |
 | Existing `evaluation/results/cases_backtest.csv` | Retain with a provenance note | Already tracked; 1,391 style/category aggregate rows, no customer/order/return identifiers; still contains commercially sensitive style-level results |

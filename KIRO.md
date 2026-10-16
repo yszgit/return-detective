@@ -2,8 +2,7 @@
 
 Project: Return Detective, a multi-agent system for ALDO Group returns, built for a hackathon judged by ALDO and AWS.
 Stack: Python 3.12, Strands Agents SDK, Amazon Bedrock, optional Athena over private S3,
-DuckDB local synthetic data, Streamlit UI. The supported app is at the repository root;
-legacy/starter preserves the earlier implementation.
+DuckDB local synthetic/prepared data, Streamlit UI. The supported app is at the repository root.
 
 Agent code lives in rd/agents/: triage.py, investigator.py and response.py own the roles;
 shared.py owns model/trace helpers; pipeline.py coordinates them. Existing imports from
@@ -13,8 +12,9 @@ Rules for any code you write:
 1. Do not change the signatures or return JSON shape of functions in `rd/tools.py`; other team members depend on them.
 2. All SQL must run on both Athena (Trino) and DuckDB: no `::` casts, no DuckDB-only functions; compute dates in
    Python and use `dlit()`; inline values with `lit()`.
-3. Evidence tools should only see data up to `tools.AS_OF.get()` (replay date). Known exceptions
-   (static baseline/sales tables, single-return lookup, global date) are documented in docs/DATA_CONTRACTS.md.
+3. Evidence tools should only see data up to `tools.AS_OF.get()` (replay date). V2 uses prior-day
+   baselines and dated lookups; withheld snapshot facts, coverage limits and the process-global date
+   are documented in docs/DATA_CONTRACTS.md.
 4. Authority limits and approval gates live in code inside the action tools, never only in prompts.
 5. Never return `customer_uid` or other customer identifiers to a model.
 6. data/private, data/raw, data/synthetic and runtime remain ignored. At the user's request,
@@ -24,7 +24,7 @@ Rules for any code you write:
 
 Open tasks:
 - UI (`app.py`, Streamlit) now has shared synthetic/ALDO scenarios, live and scripted modes, saved live
-  traces, case files and demo approvals. Historical impact data is in evaluation/results/cases_backtest.csv;
+  traces, case files, demo approvals and dated follow-up. Current v2 rule replay is in evaluation/results/curated_v2_backtest.csv;
   it is not shown for synthetic runs. Improve verified business metrics separately from this layout cleanup.
 - DynamoDB demo storage is optional behind `RD_STORE_BACKEND=dynamodb`; finish transactional updates and authenticated approval before production use.
 - On approval requests, publish to an SNS topic so approvers get an email.

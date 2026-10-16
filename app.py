@@ -18,7 +18,7 @@ import datetime as dt
 import pandas as pd
 import streamlit as st
 
-from rd import store, tools
+from rd import store
 from rd.data import rows, lit
 from rd.config import BACKEND, BACKTEST_PATH, data_available, is_synthetic
 from rd.scenarios import SCENARIOS as ALL_SCENARIOS

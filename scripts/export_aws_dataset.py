@@ -3,7 +3,6 @@
 Without --execute this performs no AWS calls. It never uploads keys or raw CSVs.
 """
 import argparse
-import json
 from pathlib import Path
 import re
 import sys

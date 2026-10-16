@@ -2,7 +2,7 @@
 
 ALDO / BSRM hackathon prototype: **Triage → Investigator → Response**, with Strands agents on Amazon Bedrock, evidence tools, a written playbook and human approval gates.
 
-This `agent` branch is organized from `feature/agent` at `f8008f0`. The complete agent implementation now runs from the repository root. The earlier starter is preserved under [`legacy/starter/`](legacy/starter/). See the [migration map](docs/REPOSITORY_STRUCTURE.md).
+The application runs from the repository root on the `agent` branch. See the [current structure](docs/REPOSITORY_STRUCTURE.md) for entry points and responsibilities.
 
 ## Quick start: local demo, no AWS
 
@@ -63,14 +63,14 @@ rd/                        Agent package, tools, detection, data access, local c
     __init__.py            Compatible run_pipeline and model-checker imports
   config.py                .env loading and repository-relative paths
   scenarios.py             Shared CLI/UI scenario definitions
+  verification.py          Dated outcome checks, case closing and reopening
   policy/                  Response playbook and authority matrix
 scripts/                   Synthetic data, private data preparation, AWS check
 tests/                     Current synthetic pipeline and entry-point checks
 evaluation/                Backtest code and documented historical results
 data/                      Selected cleaned snapshot; other private/generated tables ignored
-docs/                      Architecture, contracts, setup, migration and data decision
+docs/                      Architecture, contracts, setup, team workflow and demo guide
 aws/                       Cloud integration status
-legacy/                    Original starter and archived prototype materials
 .github/workflows/ci.yml    Offline checks for agent and team branches
 ```
 
@@ -93,10 +93,7 @@ The follow-up is triggered from the UI/CLI; it is not a background AWS schedule.
 
 ```sh
 python -m unittest discover -s tests -v
-python -m compileall -q rd app.py run_demo.py scripts tests evaluation legacy
-cd legacy/starter
-python -m unittest discover -s tests -v
-python -m return_detective.demo
+python -m compileall -q rd app.py run_demo.py scripts tests evaluation
 ```
 
 Tests generate temporary synthetic and official-schema fixtures without AWS/Bedrock. V2 fee grain, unknowns, IDs, time cutoffs, AWS layout and chronological follow-up have regression coverage. The committed snapshot reproduces the v2 rule replay; see [evaluation notes](evaluation/README.md).
@@ -105,4 +102,4 @@ Tests generate temporary synthetic and official-schema fixtures without AWS/Bedr
 
 At the user's explicit request, this private branch includes the complete pseudonymized official v2 snapshot, cleaning/validation code, manifest and aggregate replay results. Raw customer identifiers, original business numbers, raw CSVs, HMAC keys, credentials and runtime traces stay outside Git. Details: [data assessment](docs/DATA_POLICY.md), [data contracts](docs/DATA_CONTRACTS.md).
 
-Further reading: [architecture and limitations](docs/ARCHITECTURE.md) · [team workflow](docs/TEAM_WORKFLOW.md) · [legacy starter](legacy/README.md).
+Further reading: [architecture and limitations](docs/ARCHITECTURE.md) · [team workflow](docs/TEAM_WORKFLOW.md) · [verification and agent comparison](docs/VERIFICATION_DEMO.md).

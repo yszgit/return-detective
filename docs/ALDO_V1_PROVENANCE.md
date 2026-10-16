@@ -1,4 +1,6 @@
-# Prepared ALDO snapshot
+# Historical v1 snapshot provenance
+
+This document records the superseded four-table release. The active release is v2; use [current data contracts](DATA_CONTRACTS.md) and [the v2 guide](OFFICIAL_DATA_V2.md) for current commands and limitations.
 
 These four prepared tables were supplied in `return_detective_starter.zip` and added at the user's request for this private team's `agent` branch. They are real business data, not synthetic fixtures.
 

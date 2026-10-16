@@ -37,4 +37,4 @@ The synthetic generator and `tests/test_synthetic_pipeline.py` verify seeded beh
 - The monthly baseline may flag before the daily screen on some cases. Compare aligned windows and denominators and report negative lead times too.
 - Savings calculations are illustrative gross avoided-return cost assumptions; intervention cost, stock holding, lost margin and uncertainty are not fully modeled.
 
-The original machine-specific analysis is preserved at `legacy/backtest_original.py` for provenance; do not use it as the supported evaluation entry point.
+The original machine-specific analysis is recoverable in Git history through commit `1859ce4`; the supported evaluation entry point is `evaluation/backtest.py`.

@@ -1,1 +1,0 @@
-"""Return Detective hackathon starter."""

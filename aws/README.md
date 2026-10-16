@@ -10,4 +10,4 @@ The complete official v2 dataset includes all six business sources. `scripts/exp
 
 Still needed for production: transactional case updates, authenticated human reviewers, SNS approval notifications, idempotent retail action execution, and durable verification scheduling. The DynamoDB adapter persists demo records but is not safe for concurrent reviewers. No infrastructure has been provisioned in the current Workshop account. A JSON or DynamoDB action log is a simulation rather than proof of a refund, hold or notification.
 
-The earlier starter's proposed inventory/Lambda contract is preserved in `legacy/starter/aws/README.md`. Reconcile it with the current style/category case model before integration.
+Current data schemas are defined by the v2 manifest and Athena export script. Action authority and case state are defined by `rd/tools.py`, `rd/store.py` and the response playbook.

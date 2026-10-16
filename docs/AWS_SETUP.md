@@ -46,7 +46,7 @@ The demo store uses three namespace-partitioned tables. Each mutation reads and 
 
 ## Athena over authorized private data
 
-For the current official v2 release, validate and upload all nine tables using `scripts/export_aws_dataset.py`; follow [the v2 handoff guide](OFFICIAL_DATA_V2.md). It generates the exact schemas and month partitions. `scripts/prepare_data.py` describes legacy v1 only. The uploader does not provision infrastructure or upload raw customer sources.
+For the current official v2 release, build with `scripts/prepare_official_data.py` and validate/upload all nine tables using `scripts/export_aws_dataset.py`; follow [the v2 handoff guide](OFFICIAL_DATA_V2.md). It generates the exact schemas and month partitions. The uploader does not provision infrastructure or upload raw customer sources.
 
 The four-table `scripts/setup_aws_data.py` workflow above is for synthetic/v1 fixtures only. Keep it separate from the nine-table official v2 database and use only the authorized team account for private data.
 
