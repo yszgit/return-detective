@@ -22,7 +22,7 @@ python scripts/check_storage.py
 python run_demo.py quality --scripted --keep-cases
 ```
 
-Storage check describes the table and checks S3, all nine Glue tables and an Athena count. It does not modify case data. Running the scenario writes cases, approvals and simulated actions. Expected: INVESTIGATE, a case, pending approval proposals. Repeating the same command should attach the return to the existing open case. Use --keep-cases so the CLI does not reset the namespace first.
+Storage check describes the table and checks S3, all nine Glue tables and an Athena count. It does not modify case data. Running the scenario writes cases, approvals and simulated actions. Repeating the same command should attach the return to its existing open case. Cases are preserved by default; `--keep-cases` remains a compatible no-op. Use `--reset-cases` only for an intentionally fresh replay; it backs up a populated workspace first.
 
 In DynamoDB Explore items, Query `PK = RUN#changsun-e2e-20261015`. Sort keys begin with CASE#, ACTION# or APPROVAL#. Payloads retain the existing case_id/action_id/approval_id fields. PK partitions isolate runs. Use a new namespace for an independent replay; use the same namespace after restarting to keep the case history. Never mix reverse historical dates in the same namespace.
 

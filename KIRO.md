@@ -1,7 +1,7 @@
 # Context for Kiro (paste this into Kiro chat or keep it in the repo as steering)
 
 Project: Return Detective, a multi-agent system for ALDO Group returns, built for a hackathon judged by ALDO and AWS.
-Stack: Python 3.12, Strands Agents SDK, Amazon Bedrock, optional Athena over private S3,
+Stack: Python 3.11/3.12 (CI uses 3.12), Strands Agents SDK, Amazon Bedrock, optional Athena over private S3,
 DuckDB local synthetic/prepared data, Streamlit UI. The supported app is at the repository root.
 
 Agent code lives in rd/agents/: triage.py, investigator.py and response.py own the roles;
@@ -22,10 +22,9 @@ Rules for any code you write:
    Do not add customer identifiers, original order numbers or other raw/private datasets.
    See docs/DATA_POLICY.md and data/cleaned/README.md.
 
-Open tasks:
-- UI (`app.py`, Streamlit) now has shared synthetic/ALDO scenarios, live and scripted modes, saved live
-  traces, case files, demo approvals and dated follow-up. Current v2 rule replay is in evaluation/results/curated_v2_backtest.csv;
-  it is not shown for synthetic runs. Improve verified business metrics separately from this layout cleanup.
-- DynamoDB demo storage is optional behind `RD_STORE_BACKEND=dynamodb`; finish transactional updates and authenticated approval before production use.
-- On approval requests, publish to an SNS topic so approvers get an email.
-- Optional: Bedrock Guardrail (deny PII output), set RD_GUARDRAIL_ID; deploy agents to Bedrock AgentCore Runtime.
+Final project:
+- `main` is the reviewed project. Root `app.py` is the single supported UI; `rd/ui.py` owns its three pages.
+- UI and CLI preserve cases. Explicit deletion/reset creates a local backup. Dated work shares historical guards.
+- Optional SNS case alerts run after new live UI investigations; future calendar plans remain manual, without scheduled email delivery.
+- Historical rule results and synthetic acceptance checks do not establish real-world root-cause accuracy or causal savings.
+- Production work remains: transactional/concurrent storage, authenticated approvals, real retail integrations and a durable scheduler. AgentCore deployment is optional and not part of the current app.

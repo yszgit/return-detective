@@ -19,11 +19,11 @@ Use the region actually assigned by the workshop. Optional `RD_FAST_MODEL_ID` ch
 
 ## Create S3, Glue, Athena and DynamoDB demo resources
 
-The account must first have Workshop credentials and permission to create a CloudFormation stack, an S3 bucket, a Glue database, an Athena workgroup and three DynamoDB tables. This local machine currently has no AWS credentials, so resource creation has not been run or verified.
+The account needs valid Workshop credentials and permission for the resources used below. Reuse existing authorized team resources when available; deploying this template is optional. This repository contains a storage template, not an automatic deployment or a guarantee of account access.
 
 1. In the AWS Console, select the Workshop region and open **CloudFormation → Create stack → Upload a template file**. Upload [`aws/return-detective.yaml`](../aws/return-detective.yaml). Use a short stack name such as `return-detective-demo`, a globally unique private bucket name and the default `aldo_returns` Glue database. Wait for `CREATE_COMPLETE`; copy the six stack outputs.
 2. Generate the synthetic fixtures with `python scripts/generate_synthetic_data.py`. Review the proposed upload with `python scripts/setup_aws_data.py --bucket <bucket-from-output>`. After checking the target account and bucket, run the same command with `--apply`. It uploads only the four synthetic Parquet tables and registers them in Glue. A non-synthetic directory requires both `--data-dir` and `--allow-private`; do that only with the data owner's authorization and the approved team account.
-3. Copy `.env.example` to `.env`. Fill the values below from the stack outputs. Keep your temporary credentials in the terminal/profile, never in `.env` or Git. Use a unique namespace so the demo's Reset button affects only your records.
+3. Copy `.env.example` to `.env` if no local configuration exists. Fill the values below from the stack outputs. Prefer temporary credentials in the terminal or AWS profile; a local `.env` containing credentials must remain ignored and excluded from sharing/synchronization. Use a unique namespace so deletion controls affect only your demo records.
 
 ```text
 AWS_REGION=<workshop-region>
@@ -42,7 +42,7 @@ RD_APPROVALS_TABLE=<ApprovalsTable-output>
 
 4. Run `python scripts/check_storage.py`. It verifies the account-owned bucket, four Glue tables, Athena count query and three active DynamoDB tables. Athena writes its query result to the private S3 output prefix and may incur a small charge. Then run `python run_demo.py syn_quality --scripted` to exercise the connected data and case store without Bedrock.
 
-The demo store uses three namespace-partitioned tables. Each mutation reads and rewrites the small demo namespace; it has no cross-table transaction or authenticated reviewer. Do not use it as a multi-user production workflow. The UI and CLI reset their namespace at the start of a run unless the CLI uses `--keep-cases`.
+The demo store uses namespace-partitioned records. Each mutation reads and rewrites the small demo namespace; it has no cross-table transaction or authenticated reviewer. Use separate namespaces for concurrently running application processes. Both UI and CLI preserve cases by default. The UI's **Delete / restore cases** controls and CLI `--reset-cases` explicitly back up before clearing a populated workspace. `--keep-cases` remains accepted for compatibility.
 
 ## Athena over authorized private data
 
@@ -61,7 +61,7 @@ python run_demo.py quality
 python -m streamlit run app.py
 ```
 
-In PowerShell use `$env:RD_BACKEND="athena"` (and the same pattern for other fields). Choose your own authorized output bucket; the former account-specific default has been removed. The checker makes read queries and a small Bedrock request, so run it only with authorized data/model access. Expected counts printed by the checker refer to the original private ALDO snapshot, not synthetic data.
+In PowerShell use `$env:RD_BACKEND="athena"` (and the same pattern for other fields). Choose an authorized output bucket. The checker prints actual counts without assuming one dataset size. By default it checks identity and Athena without invoking a model. Use `python scripts/check_aws.py --model-only` to explicitly check Bedrock, or `--allow-model-call` to include it with storage checks. `--region us-east-1` can override the configured Workshop region. Model checks incur model usage; status output never prints credentials.
 
 For a real local snapshot, set `RD_BACKEND=duckdb`, `RD_DATA_DIR=data/private`. Named ALDO scenarios refer to the IDs from the original prepared snapshot; use explicit `--return-id ... --as-of YYYY-MM-DD` if your snapshot differs.
 
@@ -69,4 +69,4 @@ For a real local snapshot, set `RD_BACKEND=duckdb`, `RD_DATA_DIR=data/private`. 
 
 The AWS role needs the selected model invocation permissions, the intended Athena workgroup/Glue database, and read/write access to the relevant private S3 prefixes. Resolve account/role limitations through the workshop administrator. Do not add credentials to source or broaden sharing to work around a permission error.
 
-Case state uses local JSON by default and the three DynamoDB tables when `RD_STORE_BACKEND=dynamodb` is selected. SNS, authenticated approval checks, idempotent retail execution and durable follow-up scheduling are not implemented here; see `aws/README.md`.
+Case state uses local JSON by default, or configured DynamoDB tables when `RD_STORE_BACKEND=dynamodb`. One PK/SK table is also supported through `RD_STATE_TABLE`. Live UI investigations can publish an optional SNS case alert; see [SNS setup](../aws/SNS.md). SNS acceptance is not proof of email delivery. Authenticated approvals, connected retail execution and durable scheduled follow-up remain outside this prototype.

@@ -16,7 +16,7 @@ import json
 import os
 import textwrap
 
-from rd import store
+from rd import store, workflow
 from rd.config import data_available, is_synthetic
 from rd.scenarios import SCENARIOS
 
@@ -52,21 +52,24 @@ def main():
     p.add_argument('--verify-case', help='check a previously scheduled case without resetting the store')
     p.add_argument('--retry-review', action='store_true', help='retry a failed follow-up at the same date')
     p.add_argument("--scripted", action="store_true", help="fixed tool sequence, no AWS/LLM with DuckDB data")
-    p.add_argument("--keep-cases", action="store_true", help="do not reset the case store first")
+    state = p.add_mutually_exclusive_group()
+    state.add_argument('--reset-cases', action='store_true', help='back up and clear this workspace before running')
+    state.add_argument('--keep-cases', action='store_true', help='legacy option; cases are now preserved by default')
     a = p.parse_args()
     if a.verify_case:
-        if not a.as_of or a.return_id or a.scenario:
-            p.error('--verify-case requires --as-of and cannot be combined with a return/scenario')
+        if not a.as_of or a.return_id or a.scenario or a.reset_cases:
+            p.error('--verify-case requires --as-of and cannot be combined with a return/scenario or --reset-cases')
         if not a.scripted and not os.environ.get('RD_MODEL_ID'):
             p.error('set RD_MODEL_ID for follow-up agents, or choose --scripted')
         try:
             dt.date.fromisoformat(a.as_of)
         except ValueError:
             p.error('--as-of must be an ISO date (YYYY-MM-DD)')
-        from rd.verification import check_case
-        result = check_case(a.verify_case, a.as_of, emit, scripted=a.scripted, retry_review=a.retry_review)
+        result = workflow.review_case(a.verify_case, a.as_of, emit, scripted=a.scripted, retry_review=a.retry_review)
         print(json.dumps(result, indent=2, default=str))
         return
+    if a.retry_review:
+        p.error('--retry-review requires --verify-case')
     if bool(a.return_id) != bool(a.as_of):
         p.error("--return-id and --as-of must be supplied together")
     if a.scenario and a.return_id:
@@ -84,15 +87,17 @@ def main():
         dt.date.fromisoformat(as_of)
     except ValueError:
         p.error("--as-of must be an ISO date (YYYY-MM-DD)")
-    if a.scripted:
-        from rd.offline import run_scripted as run
-    else:
-        if not os.environ.get("RD_MODEL_ID"):
-            p.error("set RD_MODEL_ID for Bedrock, or use --scripted for the local demo")
-        from rd.agents import run_pipeline as run
-    if not a.keep_cases:
-        store.reset()
-    run(rid, as_of, emit)
+    if not a.scripted and not os.environ.get('RD_MODEL_ID'):
+        p.error('set RD_MODEL_ID for Bedrock, or use --scripted for the local demo')
+    if a.reset_cases:
+        from rd.workspace_state import clear_saved_cases
+        if any(len(value) for value in store.snapshot().values()):
+            backup = clear_saved_cases()
+            print('Workspace backed up before reset:', backup['backup_path'])
+        else:
+            print('Workspace already empty; existing backups are preserved.')
+    # CLI runs share the UI's historical guards. SNS remains opt-in to the live UI.
+    workflow.run_example(rid, as_of, emit, scripted=a.scripted, notify=False)
     db = store.snapshot()
     print("\n=== Case store ===")
     for c in db["cases"].values():

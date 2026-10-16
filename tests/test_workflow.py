@@ -89,6 +89,21 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'separate workspace'):
             self.workflow.process_day('2026-01-29')
 
+    def test_attaching_later_returns_advances_the_workspace_cutoff(self):
+        case = self.store.open_case('SYNTH-RiverLoafer', 'Quality', '2026-01-01', 'case', 'evidence')
+        self.workflow.process_day('2026-01-30')
+        updated = self.store.get_case(case['case_id'])
+        self.assertEqual(updated['last_activity_as_of'], '2026-01-30')
+        with self.assertRaisesRegex(ValueError, '2026-01-30'):
+            self.workflow.run_example(940, '2026-01-07', lambda e: None, scripted=True, notify=False)
+
+    def test_prepared_examples_reuse_the_same_date_guard_without_cli_alerts(self):
+        with patch('rd.notifications.notify_case') as notify:
+            self.workflow.run_example(6027, '2026-01-31', lambda e: None, scripted=True, notify=False)
+        notify.assert_not_called()
+        case = next(iter(self.store.snapshot()['cases'].values()))
+        self.assertEqual(case['last_activity_as_of'], '2026-01-31')
+
     def test_live_case_alert_fires_after_save_and_not_on_attachment(self):
         from rd import offline
         report = self.workflow.process_day('2026-01-30')

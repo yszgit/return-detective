@@ -2,6 +2,13 @@
 
 ## Suggested sequence
 
+Use a dedicated workspace/namespace and progress forward through historical dates.
+For an earlier replay, select a separate workspace or back up and clear the current
+demo workspace through the sidebar controls. Future manual review plans and
+historical follow-up replays are separate: saving a calendar plan does not start
+a scheduler or promise a future email. Configured SNS sends immediate case alerts
+after a successful live investigation.
+
 1. Open **Returns monitor**. Explain that all supplied returns for a historical
    day are screened with grouped SQL and zero model calls. Review the counts and
    compact investigation queue. A signal is an unusual return-reason pattern,
@@ -38,7 +45,7 @@
 - Private cloud rehearsal artifacts remain under ignored `runtime/pitch-live/`.
   Their cases use a separate DynamoDB namespace from the team's main workspace.
   Automated rehearsal decisions must remain labelled as test decisions.
-  The current rehearsal has three pending proposals for human review. Its actual
+  The recorded rehearsal had three pending proposals for human review. Its actual
   initial Bedrock assessment was Medium; the later historical follow-up raised
   it to High. The same-cutoff fixed-policy run proposed three actions immediately.
   The comparison is visible on the rehearsal case and preserves uncertainty

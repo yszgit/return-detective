@@ -142,12 +142,33 @@ class SyntheticPipelineTest(unittest.TestCase):
 
     def test_cli_runs_after_relocation_from_another_directory(self):
         result = subprocess.run(
-            [sys.executable, os.path.join(APP, "run_demo.py"), "syn_quality", "--scripted"],
+            [sys.executable, os.path.join(APP, "run_demo.py"), "syn_quality", "--scripted", "--reset-cases"],
             cwd=self.data_dir, capture_output=True, text=True, timeout=30,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('"decision": "INVESTIGATE"', result.stdout)
         self.assertIn("APPROVAL", result.stdout)
+
+    def test_cli_preserves_cases_by_default_and_reset_creates_a_backup(self):
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as folder:
+            env = dict(os.environ, RD_BACKEND='duckdb', RD_STORE_BACKEND='json', RD_DATASET_VERSION='1',
+                       RD_DATA_DIR=self.data_dir, RD_RUNTIME_DIR=folder, RD_SNS_TOPIC_ARN='')
+            command = [sys.executable, os.path.join(APP, 'run_demo.py')]
+            first = subprocess.run(command + ['syn_quality', '--scripted'], env=env,
+                                   capture_output=True, text=True, timeout=30)
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+            before = json.loads(Path(folder, 'cases.json').read_text())
+            second = subprocess.run(command + ['syn_quality', '--scripted'], env=env,
+                                    capture_output=True, text=True, timeout=30)
+            self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+            self.assertEqual(set(before['cases']), set(json.loads(Path(folder, 'cases.json').read_text())['cases']))
+            reset = subprocess.run(command + ['syn_isolated', '--scripted', '--reset-cases'], env=env,
+                                   capture_output=True, text=True, timeout=30)
+            self.assertEqual(reset.returncode, 0, reset.stdout + reset.stderr)
+            self.assertEqual(json.loads(Path(folder, 'cases.json').read_text())['cases'], {})
+            backup = next(Path(folder).glob('backups/*/clear-*.json'))
+            self.assertEqual(json.loads(backup.read_text())['state'], before)
 
     def test_backtest_keeps_generated_results_out_of_historical_file(self):
         from pathlib import Path

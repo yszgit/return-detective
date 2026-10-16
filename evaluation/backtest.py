@@ -29,6 +29,8 @@ from rd.config import RUNTIME_DIR  # noqa: E402
 
 REPORT_MIN = 30
 OUT = RUNTIME_DIR / "evaluation" / "cases_backtest.csv"
+COLUMNS = ['style', 'category', 'flag_date', 'returns_at_flag', 'after_flag', 'total',
+           'sustained_next_28d', 'report_date', 'returns_at_report']
 
 
 def main(output_path=OUT, start=None, end=None):
@@ -38,6 +40,8 @@ def main(output_path=OUT, start=None, end=None):
     base = pd.DataFrame(rows("select category, share from baseline")).set_index("category")["share"]
     d = pd.DataFrame(rows("""select style, category, return_date, count(*) as n from returns
                               where style is not null group by style, category, return_date"""))
+    if d.empty:
+        raise ValueError('No eligible records for the legacy backtest.')
     d["return_date"] = pd.to_datetime(d["return_date"])
     tot = d.groupby(["style", "return_date"])["n"].sum().rename("tot").reset_index()
     days = pd.date_range(d.return_date.min(), d.return_date.max())
@@ -65,18 +69,23 @@ def main(output_path=OUT, start=None, end=None):
             at_flag = int(cs.loc[fd])
             total = int(cs.iloc[-1])
             f = fwd.loc[(style, fd)]
-            sustained = bool(f.n >= 3 and f.tot > 0 and f.n / f.tot >= 2 * p)
+            complete = fd + pd.Timedelta(days=WINDOW_DAYS) <= days[-1]
+            sustained = bool(f.n >= 3 and f.tot > 0 and f.n / f.tot >= 2 * p) if complete else None
             mon = s.resample("ME").sum()
+            mon = mon.loc[mon.index <= days[-1]]  # a partial final month is not a month-end report
             rep = mon[(mon.n >= REPORT_MIN) & (mon.n / mon.tot.replace(0, np.nan) >= MIN_LIFT[cat] * p)]
             rep_date = rep.index[0] if len(rep) else None
             out.append(dict(style=style, category=cat, flag_date=fd.date(), returns_at_flag=at_flag,
                             after_flag=total - at_flag, total=total, sustained_next_28d=sustained,
                             report_date=rep_date.date() if rep_date is not None else None,
                             returns_at_report=int(cs.loc[rep_date]) if rep_date is not None else None))
-    df = pd.DataFrame(out)
+    df = pd.DataFrame(out, columns=COLUMNS)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
+    if df.empty:
+        print('signals: 0 | no threshold-crossing cases in the supplied history')
+        return df
     both = df.dropna(subset=["report_date"]).copy()
     both["lead_days"] = (pd.to_datetime(both.report_date) - pd.to_datetime(both.flag_date)).dt.days
     print(f"signals: {len(df)}  | also caught by monthly report: {len(both)}  | never caught: {df.report_date.isna().sum()}")
@@ -84,6 +93,7 @@ def main(output_path=OUT, start=None, end=None):
           f"#{both.returns_at_report.median():.0f} for the report, {both.lead_days.median():.0f} days earlier")
     print(f"sustained 28 days after the flag (false-alarm proxy): {df.sustained_next_28d.mean():.0%} overall")
     print(df.groupby("category").agg(signals=("style", "size"), sustained=("sustained_next_28d", "mean")).round(2))
+    return df
 
 
 if __name__ == "__main__":

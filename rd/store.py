@@ -5,6 +5,7 @@ table when RD_STATE_TABLE is set. Each namespace is an isolated demo run.
 The read/modify/write API is still a demo API, not a concurrent transaction system.
 """
 import json, os, threading, uuid, datetime
+import time
 from decimal import Decimal
 from .config import RUNTIME_DIR
 
@@ -95,7 +96,16 @@ def _save(db):
     tmp = _PATH + ".tmp"
     with open(tmp, "w") as f:
         json.dump(db, f, indent=2, default=str)
-    os.replace(tmp, _PATH)
+    # Windows indexers/sync clients can briefly lock the destination after a write.
+    # Keep the previous complete store if the lock persists; never truncate it.
+    for attempt in range(6):
+        try:
+            os.replace(tmp, _PATH)
+            break
+        except PermissionError:
+            if attempt == 5:
+                raise
+            time.sleep(0.05 * 2 ** attempt)
 
 
 def reset():
@@ -114,7 +124,7 @@ def snapshot():
 
 
 def _now():
-    return datetime.datetime.now().isoformat(timespec="seconds")
+    return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 
 
 def get_case(case_id):

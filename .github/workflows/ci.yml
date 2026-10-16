@@ -12,6 +12,14 @@ permissions:
 jobs:
   offline-checks:
     runs-on: ubuntu-latest
+    env:
+      RD_BACKEND: duckdb
+      RD_STORE_BACKEND: json
+      RD_RUNTIME_DIR: runtime/ci
+      RD_MODEL_ID: ''
+      RD_FAST_MODEL_ID: ''
+      RD_SNS_TOPIC_ARN: ''
+      AWS_EC2_METADATA_DISABLED: 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,14 +40,14 @@ jobs:
           RD_DATA_DIR: data/cleaned
           RD_RUNTIME_DIR: runtime/cleaned-ci
         run: |
-          python run_demo.py isolated --scripted
-          python run_demo.py quality --scripted
-          python run_demo.py fit --scripted
+          python run_demo.py isolated --scripted --reset-cases
+          python run_demo.py quality --scripted --reset-cases
+          python run_demo.py fit --scripted --reset-cases
       - name: Generate local synthetic tables
         run: python scripts/generate_synthetic_data.py
       - name: Run scripted scenarios without AWS or a model
         run: |
-          python run_demo.py syn_isolated --scripted
-          python run_demo.py syn_quality --scripted
-          python run_demo.py syn_fit --scripted
-          python run_demo.py syn_damage --scripted
+          python run_demo.py syn_isolated --scripted --reset-cases
+          python run_demo.py syn_quality --scripted --reset-cases
+          python run_demo.py syn_fit --scripted --reset-cases
+          python run_demo.py syn_damage --scripted --reset-cases

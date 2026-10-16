@@ -10,5 +10,5 @@ What did you run? Include any remaining failures or unverified AWS/model behavio
 
 List schema, configuration, permission, or dependency changes. Link the relevant issue.
 
-- [ ] PR targets `develop` (or a coordinated release from `develop` into `main`).
+- [ ] PR targets `main` and has been reviewed against the final project.
 - [ ] No credentials, private raw data, or unsupported impact claims are included.

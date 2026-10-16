@@ -23,18 +23,12 @@ Return dates cover **2024-02-04 through 2026-01-31**. `manifest.json` records so
 
 Tokens preserve joins and grouping but are not original order numbers. The files remain private commercial data: product names, dates and business metrics are still real. Pseudonymization does not make them anonymous or authorize broader distribution. The original attachment is preserved locally; this directory contains the prepared, pseudonymized copy.
 
-## Use locally
+## Current startup instructions
 
-From the repository root after installing `requirements.txt`:
-
-```sh
-python scripts/validate_cleaned_data.py
-RD_BACKEND=duckdb RD_DATA_DIR=data/cleaned python run_demo.py isolated --scripted
-RD_BACKEND=duckdb RD_DATA_DIR=data/cleaned python run_demo.py quality --scripted
-RD_BACKEND=duckdb RD_DATA_DIR=data/cleaned python run_demo.py fit --scripted
-RD_BACKEND=duckdb RD_DATA_DIR=data/cleaned python -m streamlit run app.py
-```
-
-For PowerShell, first set `$env:RD_BACKEND="duckdb"` and `$env:RD_DATA_DIR="data/cleaned"`, then run the same Python commands. Root `.env` can also hold those non-secret settings. Scripted runs do not invoke a language model or AWS. Remove `--scripted` only when your own Bedrock credentials/model are configured.
-
-The CLI's existing ALDO scenario IDs match this snapshot. Synthetic data remains the default application setting; select `data/cleaned` explicitly. Detection and evaluation limitations, including static baselines and undated sales denominators, still apply; see `docs/DATA_CONTRACTS.md` and `evaluation/README.md`.
+This page records historical provenance. `data/cleaned/` now contains v2, with nine
+tables and prior-day baselines. Use the [current README](../README.md) and
+[v2 guide](OFFICIAL_DATA_V2.md) for startup and independent scenario replays.
+The old four-table snapshot remains recoverable from Git history; it should not
+replace the current data directory. Its static-baseline and undated-sales limits
+remain documented in [legacy contracts](DATA_CONTRACTS_V1.md) and
+[evaluation notes](../evaluation/README.md).

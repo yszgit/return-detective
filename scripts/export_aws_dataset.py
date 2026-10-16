@@ -62,9 +62,13 @@ def main(a):
     print(f'{len(plan)} files; Athena DDL: {path}; execute={a.execute}')
     if a.execute:
         import boto3
-        s3=boto3.client('s3')
+        session=boto3.Session()
+        account=session.client('sts').get_caller_identity()['Account']
+        s3=session.client('s3')
+        s3.head_bucket(Bucket=a.bucket, ExpectedBucketOwner=account)
         for local,key in plan:
-            s3.upload_file(str(local),a.bucket,key)
+            s3.upload_file(str(local),a.bucket,key,
+                           ExtraArgs={'ServerSideEncryption':'AES256','ExpectedBucketOwner':account})
     else:
         for local,key in plan:
             print(f'{local.name} -> s3://{a.bucket}/{key}')

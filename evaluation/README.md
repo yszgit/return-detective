@@ -32,8 +32,8 @@ The synthetic generator and `tests/test_synthetic_pipeline.py` verify seeded beh
 ## Limits of historical results
 
 - A prepared pseudonymized snapshot is now included in `data/cleaned/`; original raw inputs are not committed. Set `RD_DATA_DIR=data/cleaned` to analyze it. Adding the snapshot does not itself validate inherited business claims.
-- Baseline category shares are computed from the full input history; SKU sales have no event dates. The present evaluation is retrospective and can leak future information. Use prior-period/as-of baselines and dated denominators before claiming unbiased early detection.
-- `sustained_next_28d` is a persistence proxy, not verified true/false root-cause labels. Near the end of the dataset the follow-up window can be incomplete.
+- In retained legacy v1 results, baseline category shares use the full input history and SKU sales have no event dates. These retrospective results can leak future information. Current v2 uses strictly prior-day baselines; neither version establishes a population return rate from mismatched sales sources.
+- `sustained_next_28d` is a persistence proxy, not verified true/false root-cause labels. Current replay code excludes incomplete follow-ups from that proxy and incomplete final months from month-end reports. Retained historical v1 files predate these corrections and have not been relabelled as new results.
 - The monthly baseline may flag before the daily screen on some cases. Compare aligned windows and denominators and report negative lead times too.
 - Savings calculations are illustrative gross avoided-return cost assumptions; intervention cost, stock holding, lost margin and uncertainty are not fully modeled.
 

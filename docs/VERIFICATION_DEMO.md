@@ -23,10 +23,11 @@ python -m streamlit run app.py
    The prepared ALDO quality scenario opens on 2024-11-23 and schedules a check
    for 2024-12-14. Synthetic fixtures stop on 2026-01-31; the UI correctly refuses
    to treat a missing February snapshot as proof of resolution.
-2. Resolve every pending simulated approval using Approve or Decline.
-3. Expand **Verify outcome and continue investigation**. Choose an observation
-   date and a follow-up mode. **Scripted (no LLM)** is the fixed-tool baseline;
-   **Live (Bedrock)** uses the terminal's configured Workshop credentials/model.
+2. In **Approvals & follow-up**, resolve every pending simulated approval using
+   **Approve proposal** or **Reject proposal** after entering a reviewer name.
+3. Expand **Historical follow-up replay**. Choose an observation date. The sidebar's
+   **Scripted baseline (no model)** runs fixed tools; **Live agents (Bedrock)**
+   uses the configured Workshop credentials/model.
 4. Press **Check outcome**. NORMAL with at least five recent style observations
    and a recorded mitigation closes the case. WATCH/SIGNAL reopens it and runs
    another investigation. Five observations is a prototype operational minimum,
@@ -35,7 +36,7 @@ python -m streamlit run app.py
    resulting proposals and next due date. An unchanged hypothesis is acceptable
    when the evidence supports it; the agent must explain its reasoning.
 
-Old cases without a stored due date have a **Schedule follow-up** button. Model
+Old cases without a stored due date have a **Schedule historical verification** button. Model
 failures leave the case REOPENED. **Retry follow-up** explicitly retries the same
 date after pending approvals are resolved. Repeated successful checks do not
 repeat model calls, cases or identical action proposals. Identical rejected
@@ -82,5 +83,10 @@ The checks cover routing, ownership, case creation, approval separation and
 duplicate handling. A failed check makes the command exit nonzero. They do not
 measure held-out real-world root-cause accuracy or causal business impact.
 Explanation quality requires a reviewer to inspect cited evidence and alternatives.
-The real-agent comparison is pending until the live command has actually run;
-scripted results must never be presented as measured LLM performance.
+The compact checked-in comparison in `evaluation/results/agent_comparison.json`
+contains an actual six-case Bedrock/rules run with source-report hashes and original
+checks. It is synthetic functional acceptance, not real-world accuracy. New runs
+must use their own matching data hash and must not be substituted for measured results.
+
+The separate **Future review plan** saves a real-calendar manual appointment;
+email reminders and automatic Agent runs are not enabled by saving that form.

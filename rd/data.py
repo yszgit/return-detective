@@ -9,6 +9,7 @@ date bounds are computed in Python and passed as DATE literals, and every value 
 inlined through `lit()`, which escapes quotes.
 """
 import datetime as dt
+from collections import OrderedDict
 from decimal import Decimal
 import os
 import threading
@@ -27,7 +28,9 @@ EXTRA_TABLES = ("return_fees", "item_flags", "order_lines", "transactions", "com
 
 CURATED = DATASET_VERSION == '2'
 _local = threading.local()
-_cache = {}
+_cache = OrderedDict()
+_cache_lock = threading.Lock()
+_CACHE_LIMIT = 256
 
 
 def lit(v):
@@ -165,10 +168,16 @@ def _rows_athena(sql):
 
 # ------------------------------------------------------------------ public
 def rows(sql):
-    if sql in _cache:
-        return _cache[sql]
+    with _cache_lock:
+        if sql in _cache:
+            _cache.move_to_end(sql)
+            return _cache[sql]
     r = _rows_athena(sql) if BACKEND == "athena" else _rows_duck(sql)
-    _cache[sql] = r
+    with _cache_lock:
+        _cache[sql] = r
+        _cache.move_to_end(sql)
+        while len(_cache) > _CACHE_LIMIT:
+            _cache.popitem(last=False)
     return r
 
 

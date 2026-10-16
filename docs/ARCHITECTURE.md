@@ -18,6 +18,9 @@ flowchart TD
     Tools --> Store[Local JSON or DynamoDB cases / actions / approvals]
     UI --> Human[Demo approval decision]
     Human --> Store
+    Review --> Alerts[Optional immediate SNS case alert]
+    UI --> Plan[Future manual review appointment]
+    Plan --> Store
     UI --> Verify[Due-date verification]
     CLI --> Verify
     Verify --> Data
@@ -29,7 +32,7 @@ flowchart TD
 
 `rd/workflow.py` groups daily screening and serializes dated operations; `rd/ui.py` renders the three business pages. See [workspace semantics](UI_WORKSPACE.md). `rd/detect.py` supplies the shared statistical screen; it opens an investigation signal rather than proving a root cause. `rd/tools.py` exposes evidence and action tools; the playbook is read from `rd/policy/response_playbook.md`.
 
-The shared configuration and scenarios now live in `rd/config.py` and `rd/scenarios.py`. Runtime state defaults to ignored `runtime/`, and local data to ignored `data/synthetic/`. Root `.env` supplies optional non-secret configuration without overriding terminal values.
+The shared configuration and scenarios now live in `rd/config.py` and `rd/scenarios.py`. Runtime state defaults to ignored `runtime/`, and local data to ignored `data/synthetic/`. Root `.env` supplies ignored local configuration without overriding terminal values. Temporary credentials, if stored there, stay local and must never be committed.
 
 ## Verified locally
 
@@ -44,8 +47,8 @@ The shared configuration and scenarios now live in `rd/config.py` and `rd/scenar
 
 - Live Bedrock and Athena adapters exist; this reorganization does not verify account access or model behavior.
 - Business actions are demo records in the selected store. No real refund, stock hold, supplier message or customer outreach is executed. Follow-up checks run when triggered from the UI/CLI; no background cloud scheduler is deployed.
-- The optional DynamoDB adapter persists demo records but reads and rewrites a namespace without cross-table transactions. SNS and live retail adapters remain future work. Approval identity is not authenticated; neither backend is a multi-user production workflow.
-- The replay date and data cache are process-global. Isolate runs; concurrent production users need request-scoped state.
+- The optional DynamoDB adapter persists demo records but reads and rewrites a namespace without cross-table transactions. Immediate SNS case alerts are optional and real when configured; email delivery is not established by SNS acceptance. Approval identity is not authenticated; neither backend is a multi-user production workflow.
+- Dated operations share a process lock because the tools' replay date is process-global. The query cache is bounded. Separate application processes need separate case namespaces; production users need transactional, request-scoped state.
 - Official v2 uses strictly prior-day baselines and date-bounded return/exchange/transaction lookups. Undated fees, flags, final statuses and shipped quantities remain snapshot facts, not historical features; population return rates and unverified financial execution are unavailable. Legacy synthetic/v1 keeps its compatibility baseline.
 - The optional Bedrock Guardrail is active only when configured. Tool outputs omit customer identifiers but can retain private business IDs.
 - Statistics suggest hypotheses; they cannot establish a supplier/production-lot cause without those source fields. Business impact sliders are assumptions, not realized savings.

@@ -269,15 +269,6 @@ def _notice(body, tone="neutral", kicker="", heading="", meta=""):
     return "".join(parts)
 
 
-def _label(text, bare=False):
-    return f'<div class="rd-label{" bare" if bare else ""}">{html.escape(text)}</div>'
-
-
-def _metric(big, cap, sub="", extra=""):
-    return (f'<div class="rd-metric"><div class="big">{big}</div><div class="cap">{cap}</div>'
-            + (f'<div class="sub">{sub}</div>' if sub else "") + extra + "</div>")
-
-
 # ------------------------------------------------------------------ rendering
 def render_event(e, box):
     agent, kind = e.get("agent", "System"), e["type"]

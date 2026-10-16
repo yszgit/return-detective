@@ -1,8 +1,8 @@
 # Operations workspace
 
-The `new-ui-code` branch uses the same root `app.py`, existing agents, data
-adapters, case store and authority checks. The original interface remains in the
-`agent` branch history. Start with `python -m streamlit run app.py`.
+The final `main` project uses root `app.py`, existing agents, data adapters,
+case store and authority checks. Earlier interfaces remain in branch history.
+Start with `python -m streamlit run app.py`.
 
 ## Three pages
 
@@ -107,9 +107,11 @@ reject past or ambiguous/nonexistent clock-change times, and do not advance the
 historical evidence cutoff. The optional email is a saved contact only.
 
 The reviewer name is a demo audit label, not authenticated identity. Notifications,
-refunds, stock holds, supplier claims and outreach remain proposed or simulated
-records, with existing code-level authority gates. No scheduler or live retail
-integration is introduced by this UI change.
+refunds, stock holds, supplier claims and outreach are separated by capability:
+retail actions and tool owner-notification records remain simulated, with code-level
+authority gates. Optional live SNS case alerts use a real publish operation and
+record acceptance separately. No future-reminder scheduler or retail integration
+is deployed by this UI; see [SNS.md](../aws/SNS.md).
 
 ## Clear a demo workspace
 

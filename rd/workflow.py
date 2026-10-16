@@ -42,6 +42,7 @@ def latest_case_date(cases):
     dates = []
     for case in cases:
         dates.append(case['opened_as_of'])
+        dates.extend(case[key] for key in ('assessment_as_of', 'last_activity_as_of') if case.get(key))
         dates.extend(check['as_of'] for check in case.get('verification_checks', []))
         planned = case.get('verification') or {}
         if planned.get('scheduled_as_of'):
@@ -150,6 +151,7 @@ def process_day(as_of):
             report['records'].append(item)
         for case_id, return_ids in linked.items():
             store.link_returns(case_id, return_ids)
+            store.update_case(case_id, last_activity_as_of=as_of)
             store.log_action(case_id, 0, 'Daily screen: attach returns', {'as_of': as_of, 'return_ids': return_ids})
         report['candidates'] = sorted(candidates.values(), key=lambda c: (-c['z_score'], c['style'], c['category']))
         levels = Counter(row['level'] for row in report['records'])
@@ -175,6 +177,7 @@ def investigate_signal(candidate, as_of, emit, *, scripted=False):
         existing = store.find_open_case(style, category)
         if existing and not existing.get('workflow_error'):
             store.link_returns(existing['case_id'], matching['return_ids'])
+            store.update_case(existing['case_id'], last_activity_as_of=as_of)
             return {'case_id': existing['case_id'], 'outcome': 'ATTACHED_TO_CASE', 'model_calls': 0}
         signal = detect.screen(style, category, as_of)
         if signal['level'] != 'SIGNAL':
@@ -223,7 +226,8 @@ def investigate_signal(candidate, as_of, emit, *, scripted=False):
         return {'case_id': case['case_id'], 'outcome': 'INVESTIGATED', **result}
 
 
-def run_example(return_id, as_of, emit, *, scripted=False):
+def run_example(return_id, as_of, emit, *, scripted=False, notify=True):
+    as_of = dt.date.fromisoformat(str(as_of)).isoformat()
     with exclusive_run():
         before = store.snapshot()['cases']
         require_forward_date(as_of, before.values())
@@ -233,8 +237,10 @@ def run_example(return_id, as_of, emit, *, scripted=False):
             from .agents import run_pipeline as run
         result = run(return_id, as_of, emit)
         from .notifications import notify_case
-        for cid in store.snapshot()['cases']:
-            if cid not in before:
+        for cid, case in store.snapshot()['cases'].items():
+            if cid not in before or case.get('linked_return_ids') != before[cid].get('linked_return_ids'):
+                store.update_case(cid, last_activity_as_of=as_of)
+            if notify and cid not in before:
                 emit({'agent': 'System', 'type': 'notification',
                       'data': notify_case(cid, scripted=scripted)})
         return result

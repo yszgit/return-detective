@@ -350,6 +350,7 @@ def _verify(out_dir):
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
     os.environ["RD_BACKEND"] = "duckdb"
     os.environ["RD_DATA_DIR"] = out_dir
+    os.environ["RD_DATASET_VERSION"] = "1"
     # fresh import so RD_DATA_DIR is picked up
     for m in list(sys.modules):
         if m == "rd" or m.startswith("rd."):
@@ -363,6 +364,7 @@ def _verify(out_dir):
         "SYNTH-CoastalBoot": ("Damaged in transit", "SIGNAL"),
         "SYNTH-EverydaySneaker": (None, "no SIGNAL"),
     }
+    failures = []
     for style, (cat, want) in expectations.items():
         res = screen_all(style, AS_OF.isoformat())
         top = res[0]
@@ -377,6 +379,10 @@ def _verify(out_dir):
             ok = row["level"] == "SIGNAL"
             print(f"   {style:<24} {cat}: level={row['level']} count={row['category_returns']} "
                   f"lift={row['lift_vs_baseline']} z={row['z_score']} -> {'OK' if ok else 'FAIL (want SIGNAL)'}")
+        if not ok:
+            failures.append(style)
+    if failures:
+        raise ValueError('Synthetic scenario checks failed: ' + ', '.join(failures))
 
 
 if __name__ == "__main__":
