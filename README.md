@@ -2,7 +2,7 @@
 
 ALDO / BSRM hackathon prototype: **Triage → Investigator → Response**, with Strands agents on Amazon Bedrock, evidence tools, a written playbook and human approval gates.
 
-The application runs from the repository root on the `agent` branch. See the [current structure](docs/REPOSITORY_STRUCTURE.md) for entry points and responsibilities.
+The application runs from the repository root. The `new-ui-code` branch adds the three-page [operations workspace](docs/UI_WORKSPACE.md); `agent` retains the preceding interface. See the [current structure](docs/REPOSITORY_STRUCTURE.md) for entry points and responsibilities.
 
 ## Quick start: local demo, no AWS
 
@@ -19,7 +19,7 @@ python -m streamlit run app.py
 
 On Windows PowerShell, create the environment with `python -m venv .venv` and activate it with `.\.venv\Scripts\Activate.ps1`; the remaining `python` commands are the same.
 
-The generator writes deterministic fake records into ignored `data/synthetic/`. The UI offers synthetic scenarios and defaults to **Scripted (no LLM)** with this dataset. Scripted mode calls real local tools in a fixed sequence; it does not demonstrate autonomous model reasoning. Actions update a local JSON demo store, not a connected retail system.
+The generator writes deterministic fake records into ignored `data/synthetic/`. The UI starts with daily processing; prepared synthetic scenarios remain in a backup drawer. Select **Scripted baseline (no model)** to exercise tools without Bedrock. Scripted mode calls real local tools in a fixed sequence; it does not demonstrate autonomous model reasoning. Actions update a local JSON demo store, not a connected retail system.
 
 ```sh
 python run_demo.py syn_isolated --scripted
@@ -64,6 +64,8 @@ rd/                        Agent package, tools, detection, data access, local c
   config.py                .env loading and repository-relative paths
   scenarios.py             Shared CLI/UI scenario definitions
   verification.py          Dated outcome checks, case closing and reopening
+  workflow.py              Grouped daily screening, signal dispatch and replay-date guards
+  ui.py                    Monitor, case workspace and approvals/follow-up pages
   policy/                  Response playbook and authority matrix
 scripts/                   Synthetic data, private data preparation, AWS check
 tests/                     Current synthetic pipeline and entry-point checks
@@ -76,17 +78,17 @@ aws/                       Cloud integration status
 
 ## Demo interface and model routing
 
-The interface uses a monochrome layout with numbered agent stages, styled case/approval cards and business-impact charts. The sidebar shows the selected data backend and each model assignment.
+The monochrome interface has three pages: **Returns monitor**, **Case workspace**, and **Approvals & follow-up**. The main entry point processes a historical day with grouped statistics. Technical traces and supporting analyses are secondary drawers. See [workspace behavior and limits](docs/UI_WORKSPACE.md).
 
 - RD_MODEL_ID selects the Investigator model.
 - RD_FAST_MODEL_ID optionally selects another model for Triage and Response. If unset, they use RD_MODEL_ID too.
-- The current pipeline starts Triage for the selected return; the statistical screen is a tool called within that stage. Automatic model-free filtering before Triage is future work.
+- Daily screening makes zero model calls. Selecting an anomaly starts the existing Investigator and Response. Prepared single-return examples retain the Triage → Investigator → Response pipeline.
 - An agent may make several model requests while using tools. Historical signal counts are not measured daily model-call counts or costs.
-- Cases, actions and approvals use local JSON by default; `RD_STORE_BACKEND=dynamodb` persists the same demo records in three deployed tables. SNS and real retail execution remain unimplemented.
+- Cases, actions and approvals use local JSON by default; `RD_STORE_BACKEND=dynamodb` persists the same demo records in the configured DynamoDB store. SNS and real retail execution remain unimplemented.
 
 ## Verification
 
-The UI now includes dated follow-up checks and an **Agent evaluation** tab.
+The **Approvals & follow-up** page includes dated checks; **Agent evaluation** remains in the supporting-analysis drawer.
 Persistent signals reopen the existing case and feed its previous hypothesis and
 new evidence back into the Investigator. See [verification and comparison guide](docs/VERIFICATION_DEMO.md).
 The follow-up is triggered from the UI/CLI; it is not a background AWS schedule.

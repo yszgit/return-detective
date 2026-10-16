@@ -168,20 +168,42 @@ from streamlit.testing.v1 import AppTest
 app = AppTest.from_file(os.environ["RD_TEST_APP"]).run(timeout=30)
 assert not app.exception, [e.message for e in app.exception]
 if os.environ["RD_TEST_MISSING"] == "1":
-    assert next(b for b in app.button if b.label == "Run").disabled
+    assert next(b for b in app.button if b.label == "Process day's returns").disabled
 else:
-    next(r for r in app.radio if r.label == "Incoming return").set_value("Synthetic · Quality defect").run()
-    next(b for b in app.button if b.label == "Run").click().run(timeout=30)
+    assert app.radio[0].options == ['Returns monitor', 'Case workspace', 'Approvals & follow-up']
+    import datetime as dt
+    next(d for d in app.date_input if d.label == 'Replay date').set_value(dt.date(2026, 1, 30)).run()
+    next(b for b in app.button if b.label == "Process day's returns").click().run(timeout=30)
     assert not app.exception, [e.message for e in app.exception]
-    assert any(event.get("agent") == "Triage Agent" and event.get("type") == "decision"
-               and event.get("data", {}).get("decision") == "INVESTIGATE"
-               for event in app.session_state["events"])
-    assert any("Waiting for a human decision" in message.value for message in app.markdown)
+    assert app.session_state["events"] == [], 'Daily screening must not invoke model agents'
+    signal = next(s for s in app.selectbox if s.label == 'Select signal')
+    index = next(i for i,label in enumerate(signal.options) if 'RiverLoafer' in label and 'Quality' in label)
+    signal.select_index(index).run()
+    next(b for b in app.button if b.label == 'Start investigation').click().run(timeout=30)
+    assert not app.exception, [e.message for e in app.exception]
+    app.radio[0].set_value('Returns monitor').run()
+    next(s for s in app.selectbox if s.label == 'Show returns').set_value('Linked to case').run()
+    assert any('Case' in frame.value and frame.value['Case'].str.startswith('CASE-').any()
+               for frame in app.dataframe), 'Newly investigated returns must appear without reprocessing'
+    app.radio[0].set_value('Case workspace').run()
+    assert not app.exception, [e.message for e in app.exception]
+    assert any('Current likely explanation' in item.value for item in app.markdown)
+    app.radio[0].set_value('Approvals & follow-up').run()
+    assert not app.exception, [e.message for e in app.exception]
+    approve = next(b for b in app.button if b.label == 'Approve proposal')
+    assert approve.disabled
+    next(t for t in app.text_input if t.label == 'Reviewer name').set_value('Fixture reviewer').run()
+    next(b for b in app.button if b.label == 'Approve proposal').click().run()
+    assert not app.exception, [e.message for e in app.exception]
+    from rd import store
+    assert any(a['status'] == 'APPROVED' for a in store.snapshot()['approvals'])
 '''
         for missing in (True, False):
             with self.subTest(missing_data=missing):
                 env = dict(os.environ, RD_TEST_APP=os.path.abspath(os.path.join(APP, "app.py")),
                            RD_TEST_MISSING="1" if missing else "0",
+                           RD_MODEL_ID='', RD_FAST_MODEL_ID='', RD_STORE_BACKEND='json',
+                           RD_DATASET_VERSION='1',
                            RD_DATA_DIR=os.path.join(self.data_dir, "missing") if missing else self.data_dir,
                            RD_RUNTIME_DIR=os.path.join(self.data_dir, "ui-runtime"))
                 result = subprocess.run([sys.executable, "-c", code], env=env,

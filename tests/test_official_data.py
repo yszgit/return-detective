@@ -99,6 +99,22 @@ class OfficialDataTests(unittest.TestCase):
         for v in self.quality['source_coverage'].values():
             self.assertEqual(v['source_rows'],v['output_rows'])
 
+    def test_daily_workflow_keeps_invalid_returns_out_of_normal_count(self):
+        workflow=importlib.import_module('rd.workflow')
+        self.tools.store.reset()
+        report=workflow.process_day('2025-01-02')
+        self.assertEqual(report['counts']['total'],1)
+        self.assertEqual(report['counts']['insufficient'],1)
+        self.assertEqual(report['counts']['normal'],0)
+        self.assertEqual(report['model_calls'],0)
+
+    def test_daily_workflow_baseline_excludes_current_and_future_days(self):
+        workflow=importlib.import_module('rd.workflow')
+        self.tools.store.reset()
+        report=workflow.process_day('2025-01-01')
+        self.assertTrue(report['screens'])
+        self.assertTrue(all(s['company_baseline_share']==0 for s in report['screens']))
+
     def test_fee_is_once_per_transaction_and_not_per_reason(self):
         self.assertEqual(self.data.one('select sum(fee_amount) as n from return_fees')['n'],11.95)
         self.assertEqual(self.data.one('select max(distinct_categories) as n from return_fees')['n'],2)

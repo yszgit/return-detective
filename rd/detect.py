@@ -34,9 +34,15 @@ def style_window_counts(style, as_of, window_days=WINDOW_DAYS):
 
 def screen(style, category, as_of, window_days=WINDOW_DAYS, _counts=None):
     counts, locations = _counts or style_window_counts(style, as_of, window_days)
+    return assess_window(style, category, as_of, counts, locations,
+                         baseline_share(category, as_of), window_days)
+
+
+def assess_window(style, category, as_of, counts, locations, baseline, window_days=WINDOW_DAYS):
+    """The same policy for individual tools and the grouped daily screen."""
     n = sum(counts.values())
     k = counts.get(category, 0)
-    p = baseline_share(category, as_of)
+    p = baseline
     share = k / n if n else 0.0
     z = (k - n * p) / math.sqrt(n * p * (1 - p)) if n and 0 < p < 1 else 0.0
     lift = share / p if p else 0.0

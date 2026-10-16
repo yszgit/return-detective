@@ -2,18 +2,14 @@
 
   streamlit run app.py
 
-Live mode runs three Strands agents on Amazon Bedrock against the configured local or Athena data.
-Every live run is saved, so it can be replayed instantly (no model calls) if the network
-or the model is slow during the pitch.
+Daily grouped statistics screen every supplied return without model calls. Selected signals
+reuse the existing Investigator and Response agents; single-return examples retain Triage.
+The operations workspace separates monitoring, case evidence, and approvals/follow-up.
 """
 import html
 import json
 import os
-import queue
 import re
-import threading
-import time
-import datetime as dt
 
 import pandas as pd
 import streamlit as st
@@ -21,14 +17,10 @@ import streamlit as st
 from rd import store
 from rd.data import rows, lit
 from rd.config import BACKEND, BACKTEST_PATH, data_available, is_synthetic
-from rd.scenarios import SCENARIOS as ALL_SCENARIOS
 
-TRACE_DIR = os.path.join(store.RUNTIME_DIR, "traces")
 BACKTEST = BACKTEST_PATH
 
 SYNTHETIC = is_synthetic() or (BACKEND == "duckdb" and not data_available())
-SCENARIOS = {s["label"]: dict(s, key=key) for key, s in ALL_SCENARIOS.items()
-             if s["synthetic"] == SYNTHETIC}
 # Agent identity: roman numeral + short name (no colour coding, no icons).
 AGENT_STYLE = {"Triage Agent": ("I", "Triage"), "Investigator Agent": ("II", "Investigator"),
                "Response Agent": ("III", "Response"), "System": ("", "System")}
@@ -253,12 +245,6 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {color: var(--g
 .rd-h-sub {font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--char); margin-bottom: 1.2rem;}
 </style>""", unsafe_allow_html=True)
 
-if "events" not in st.session_state:
-    st.session_state.events = []
-    st.session_state.scenario = list(SCENARIOS)[0]
-    st.session_state.mode = None
-
-
 def clean(s):
     return html.unescape(str(s))
 
@@ -321,15 +307,15 @@ def render_event(e, box):
                     st.code(out[:3000])
         elif kind == "decision":
             d = e.get("data") or {}
-            if agent == "Triage Agent":
+            if agent == "Triage Agent" or "decision" in d:
                 dec = d.get("decision", "?")
                 tone = "investigate" if dec == "INVESTIGATE" else "isolated" if dec == "ISOLATED" else "neutral"
                 meta = " · ".join(_esc(x) for x in (d.get("style", ""), d.get("category", "")) if x)
-                st.markdown(_notice(_esc(d.get("rationale", "")), tone, kicker=f"{num} · Triage decision",
+                st.markdown(_notice(_esc(d.get("rationale", "")), tone, kicker="Triage decision" if agent == "Triage Agent" else "Statistical screening",
                                     heading=f'<span class="v">{_esc(dec)}</span>', meta=meta),
                             unsafe_allow_html=True)
             else:
-                st.markdown(_notice(f"<b>Root cause.</b> {_esc(d.get('root_cause', ''))}", "neutral",
+                st.markdown(_notice(f"<b>Likely explanation.</b> {_esc(d.get('root_cause', ''))}", "neutral",
                                     kicker=f"{num} · Investigation result" if num else "Investigation result",
                                     heading=f"Confidence: {_esc(d.get('confidence', '?'))}"),
                             unsafe_allow_html=True)
@@ -361,167 +347,6 @@ def pair_tool_calls(events):
             e = dict(e, input=pending.pop((e["agent"], e["tool"]), None))
         out.append(e)
     return out
-
-
-# ------------------------------------------------------------------ runs
-def trace_path(key):
-    return os.path.join(TRACE_DIR, f"{key}.json")
-
-
-def run_live(sc, box, scripted=False):
-    if store.STORE_BACKEND == 'json':
-        store.reset()
-    q, events, err = queue.Queue(), [], []
-
-    def worker():
-        try:
-            if scripted:
-                from rd.offline import run_scripted
-                run_scripted(sc["return_id"], sc["as_of"], q.put)
-            else:
-                from rd.agents import run_pipeline
-                run_pipeline(sc["return_id"], sc["as_of"], q.put)
-        except Exception as ex:  # surface errors in the UI
-            err.append(repr(ex))
-        finally:
-            q.put(None)
-
-    th = threading.Thread(target=worker, daemon=True)
-    th.start()
-    status = box.empty()
-    t0, pending = time.time(), {}
-    while True:
-        try:
-            e = q.get(timeout=0.5)
-        except queue.Empty:
-            status.caption(f"Agents working · {time.time() - t0:.0f}s")
-            continue
-        if e is None:
-            break
-        events.append(e)
-        if e["type"] == "tool_call":
-            pending[(e["agent"], e["tool"])] = e.get("input")
-            status.caption(f"{e['agent']} is calling `{e['tool']}`")
-            continue
-        if e["type"] == "tool_result":
-            e = dict(e, input=pending.pop((e["agent"], e["tool"]), None))
-        render_event(e, box)
-    status.empty()
-    if err:
-        box.markdown(_notice(html.escape(err[0]), "investigate", kicker="Run failed"), unsafe_allow_html=True)
-    os.makedirs(TRACE_DIR, exist_ok=True)
-    if not err and not scripted:
-        with open(trace_path(sc["key"]), "w", encoding="utf-8") as f:
-            json.dump({"events": events, "store": store.snapshot(), "seconds": round(time.time() - t0)}, f, default=str)
-    return events
-
-
-def replay(sc, box, speed=0.35):
-    with open(trace_path(sc["key"]), encoding="utf-8") as f:
-        saved = json.load(f)
-    if store.STORE_BACKEND == 'json':
-        store.restore(saved["store"])
-    else:
-        box.caption('Saved trace playback; current DynamoDB cases are preserved.')
-    evs = pair_tool_calls(saved["events"])
-    for e in evs:
-        render_event(e, box)
-        time.sleep(speed if e["type"] != "tool_result" else speed / 3)
-    return saved["events"]
-
-
-# ------------------------------------------------------------------ case panel
-def case_panel():
-    db = store.snapshot()
-    if not db["cases"]:
-        st.markdown(_notice("No case open. Isolated returns are handled normally and only logged.", "plain"),
-                    unsafe_allow_html=True)
-        return
-    for c in db["cases"].values():
-        conf = c.get("confidence") or "—"
-        cc = {"High": "high", "Medium": "medium", "Low": "low"}.get(conf, "")
-        st.markdown(f"""<div class="rd-case"><div class="rd-label bare">Case file</div>
-<h4><span class="id">{_esc(c['case_id'])}</span> &nbsp;{_esc(c['style'])}</h4>
-<span class="rd-chip">{_esc(c['category'])}</span><span class="rd-chip {cc}">Confidence &middot; {_esc(conf)}</span><span class="rd-chip">{_esc(c['status'].replace('_', ' '))}</span>
-<div class="rd-field"><div class="k">Root cause</div><div class="v">{_esc(c.get('root_cause') or '')}</div></div>
-<div class="rd-field"><div class="k">Owner</div><div class="v muted">{_esc(c.get('owner_team') or '')} &middot; opened as of {_esc(c['opened_as_of'])}</div></div>
-</div>""", unsafe_allow_html=True)
-        acts = [a for a in db["actions"] if a["case_id"] == c["case_id"]]
-        if acts:
-            st.markdown(_label("Recorded demo actions"), unsafe_allow_html=True)
-            for a in acts:
-                det = a["detail"]
-                extra = ""
-                if isinstance(det, dict) and "amount_cad" in det:
-                    extra = f" — CA${_esc(det['amount_cad'])} in simulated fee waivers for {_esc(det['returns_refunded'])} returns"
-                who = "" if a["executed_by"] == "agent" else f' <span class="who">· {_esc(a["executed_by"])}</span>'
-                st.markdown(f'<div class="rd-act"><span class="tier">T{_esc(a["tier"])}</span>'
-                            f'<span>{_esc(a["action"])}{extra}{who}</span></div>', unsafe_allow_html=True)
-        aps = [a for a in db["approvals"] if a["case_id"] == c["case_id"]]
-        if aps:
-            st.markdown('<div style="height:1.6rem"></div>' + _label("Waiting for a human decision"), unsafe_allow_html=True)
-            for a in aps:
-                det = a["detail"] if isinstance(a["detail"], dict) else {}
-                body = next((clean(v) for k, v in det.items() if k in ("proposed_text", "draft", "offer", "scope")), "")
-                with st.container(border=True, key="rdcard" + a["approval_id"]):
-                    st.markdown(f'<div class="rd-appr-h"><span class="tier">T{_esc(a["tier"])}</span>{_esc(a["action"])}</div>'
-                                f'<div class="rd-appr-to">For {_esc(a["approver"])}</div>', unsafe_allow_html=True)
-                    if body:
-                        st.caption(body[:600])
-                    if a["status"] == "PENDING":
-                        b1, b2 = st.columns(2)
-                        if b1.button("Approve", key="ap" + a["approval_id"], type="primary", width="stretch"):
-                            store.decide_approval(a["approval_id"], True, "Demo reviewer")
-                            st.rerun()
-                        if b2.button("Decline", key="rj" + a["approval_id"], width="stretch"):
-                            store.decide_approval(a["approval_id"], False, "Demo reviewer")
-                            st.rerun()
-                    else:
-                        tone = "" if a["status"] == "APPROVED" else " rejected"
-                        st.markdown(f'<div class="rd-decided{tone}">{_esc(a["status"])}</div>', unsafe_allow_html=True)
-        if c.get("hypotheses"):
-            with st.expander("Hypotheses tested"):
-                st.dataframe(pd.DataFrame(c["hypotheses"]), hide_index=True, width="stretch")
-        verification_panel(c)
-
-
-def verification_panel(case):
-    planned = case.get('verification') or {}
-    if not planned.get('due_on'):
-        if case['status'] != 'CLOSED' and st.button('Schedule follow-up', key='vfschedule'+case['case_id']):
-            from rd.verification import schedule
-            schedule(case['case_id'], case['opened_as_of'])
-            st.rerun()
-        return
-    cid = case['case_id']
-    with st.expander('Verify outcome and continue investigation', expanded=False):
-        st.caption(f"Due: {planned['due_on']} · {planned['status'].replace('_', ' ')}")
-        st.caption('Run a dated check against the supplied data. Follow-up actions remain simulated.')
-        chosen = st.date_input('Observation date', value=dt.date.fromisoformat(planned['due_on']), key='vfdate'+cid)
-        follow_mode = st.radio('Follow-up mode', ['Scripted (no LLM)', 'Live (Bedrock)'], key='vfmode'+cid)
-        live = follow_mode == 'Live (Bedrock)'
-        retry = bool(case.get('review_error_as_of'))
-        if retry:
-            st.warning('The last follow-up failed. Resolve any new approvals, then retry this date.')
-        if st.button('Check outcome' if not retry else 'Retry follow-up', key='vfgo'+cid,
-                     disabled=case['status'] == 'CLOSED' or (live and not os.environ.get('RD_MODEL_ID'))):
-            from rd.verification import check_case
-            events = []
-            try:
-                with st.spinner('Checking observations and reviewing any persistent signal...'):
-                    result = check_case(cid, chosen.isoformat(), events.append, scripted=not live, retry_review=retry)
-                st.session_state['vfresult'+cid] = result
-                st.session_state.events.extend(events)
-                st.rerun()
-            except Exception as exc:
-                st.error(f'Follow-up failed: {exc}')
-        result = st.session_state.get('vfresult'+cid)
-        if result:
-            st.write(result['outcome'].replace('_', ' '))
-            if result.get('message'):
-                st.caption(result['message'])
-        if case.get('verification_checks'):
-            st.json(case['verification_checks'][-1])
 
 
 def agent_evaluation_panel():
@@ -585,7 +410,7 @@ def impact_tab():
     st.caption("Rule replay for the selected result file. Persistence is not confirmed root-cause accuracy; these figures are not measured savings.")
     df, both = backtest()
     tiles = [
-        (f"#{int(both.returns_at_flag.median())}", "related return at which the agent flags a systemic issue",
+        (f"#{int(both.returns_at_flag.median())}", "related return at which the statistical screen flags a signal",
          f"vs #{int(both.returns_at_report.median())} with a monthly report"),
         (f"{int(both.lead_days.median())} days", "earlier detection (median)", "same cases, same data"),
         (f"{len(df):,}", "statistical signals in the evaluated period", f"{(df.category == 'Quality').sum()} quality, "
@@ -648,7 +473,7 @@ def impact_tab():
                         extra=f'<div class="plus">+ up to CA${upside:,.0f} / yr</div>'
                               '<div class="sub">from sustained signals a monthly report never catches</div>'),
                 unsafe_allow_html=True)
-    st.caption("Plus customer fairness: 26-41% of online customers returning for quality, wrong item or transit damage were still charged a restocking fee.")
+    st.caption("Official v2 fee snapshots do not establish historical charge timing or verified currency. Customer-level refund eligibility and realized savings cannot be inferred from these charts.")
     with st.expander("Backtest by category"):
         t = both.groupby("category").agg(cases=("style", "size"), agent_flags_at=("returns_at_flag", "median"),
                                           report_flags_at=("returns_at_report", "median"), days_earlier=("lead_days", "median"))
@@ -678,88 +503,19 @@ def architecture_tab():
     st.markdown("""
 | Stage | When it runs | Model |
 |---|---|---|
-| Statistical screen, SQL on configured backend | Called by Triage through screen_style | No model inside the screen |
-| Triage | Each selected incoming return in this prototype | RD_FAST_MODEL_ID, or RD_MODEL_ID |
-| Investigator | When Triage returns INVESTIGATE | **RD_MODEL_ID** |
+| Daily statistical screen | All supplied returns on the selected date, grouped SQL | No model calls |
+| Triage | Prepared single-return examples | RD_FAST_MODEL_ID, or RD_MODEL_ID |
+| Investigator | Explicitly selected daily signal, or Triage INVESTIGATE | **RD_MODEL_ID** |
 | Response | After an investigation completes | RD_FAST_MODEL_ID, or RD_MODEL_ID |
 """)
-    st.caption("Each agent can make multiple model requests while using tools. Historical signal counts are not measured daily model-call volumes or costs; automatic pre-screening before Triage is not implemented.")
+    st.caption("The daily screen uses grouped SQL and zero model calls. An explicit signal selection starts Investigator and Response. Each role may make multiple model requests; historical signal counts are not measured model-call volumes or costs.")
 
 
-# ------------------------------------------------------------------ layout
-st.markdown('<div class="rd-bar">ALDO<span class="dot">·</span>Returns intelligence<span class="dot">·</span>Internal</div>'
-            '<div class="rd-mast"><div class="rd-wordmark">Return Detective</div></div>', unsafe_allow_html=True)
-st.markdown('<div class="rd-sub">Every return is a clue. Three AI agents read each ALDO return, decide whether it is '
-            'an isolated case or an emerging problem, investigate the cause and act within a written authority matrix.</div>',
-            unsafe_allow_html=True)
-st.markdown('<div class="rd-agents">'
-            '<div class="a"><span class="n">I</span><span class="t">Triage</span><span class="d">isolated or pattern</span></div>'
-            '<div class="a"><span class="n">II</span><span class="t">Investigator</span><span class="d">root cause and confidence</span></div>'
-            '<div class="a"><span class="n">III</span><span class="t">Response</span><span class="d">act within authority</span></div>'
-            '</div>', unsafe_allow_html=True)
+# ------------------------------------------------------------------ operations workspace
+from rd.ui import render_workspace
 
-with st.sidebar:
-    st.caption("Synthetic data" if SYNTHETIC else "Authorized ALDO data")
-    if not data_available():
-        st.markdown(_notice("Generate local demo data: python scripts/generate_synthetic_data.py", "plain"), unsafe_allow_html=True)
-    st.caption("Actions are simulated; no retail system is connected.")
-    st.header("Scenario")
-    if st.session_state.scenario not in SCENARIOS:
-        st.session_state.scenario = list(SCENARIOS)[0]
-    name = st.radio("Incoming return", list(SCENARIOS), index=list(SCENARIOS).index(st.session_state.scenario))
-    st.session_state.scenario = name
-    sc = SCENARIOS[name]
-    st.caption(sc["blurb"])
-    st.markdown(f'<div class="rd-field" style="margin-bottom:1.4rem"><div class="k">Return</div>'
-                f'<div class="v">#{_esc(sc["return_id"])} · {_esc(sc["as_of"])}</div></div>', unsafe_allow_html=True)
-    has_trace = os.path.exists(trace_path(sc["key"]))
-    mode = st.radio("Mode", ["Live (Bedrock)", "Replay saved live run", "Scripted (no LLM)"],
-                    index=2 if SYNTHETIC else 0, help="Every live run is saved. Replay shows a previous live run instantly.")
-    go = st.button("Run", type="primary", width="stretch",
-                   disabled=(mode == "Replay saved live run" and not has_trace) or not data_available()
-                   or (mode == "Live (Bedrock)" and not os.environ.get("RD_MODEL_ID")))
-    if mode == "Live (Bedrock)" and not os.environ.get("RD_MODEL_ID"):
-        st.caption("Set RD_MODEL_ID and AWS credentials before a live run.")
-    if mode == "Replay saved live run" and not has_trace:
-        st.caption("No saved live run yet for this scenario.")
-    st.divider()
-    inv_model = os.environ.get("RD_MODEL_ID") or "not configured"
-    fast_model = os.environ.get("RD_FAST_MODEL_ID") or f"{inv_model} (same)"
-    st.caption(f"Data · {BACKEND}  \n"
-               f"Investigator · {inv_model}  \n"
-               f"Triage + Response · {fast_model}")
-    if st.button("Reset case store", width="stretch"):
-        store.reset()
-        st.session_state.events = []
-        st.rerun()
-
-tab1, tab2, tab3, tab4 = st.tabs(["Live investigation", "Business impact", "AWS architecture", "Agent evaluation"])
-with tab1:
-    left, right = st.columns([1.55, 1], gap="large")
-    with left:
-        st.markdown(_label("Agent reasoning and tool calls"), unsafe_allow_html=True)
-        box = st.container()
-        if go:
-            if mode == "Replay saved live run":
-                st.session_state.events = replay(sc, box)
-            else:
-                st.session_state.events = run_live(sc, box, scripted=(mode == "Scripted (no LLM)"))
-            st.session_state.mode = mode
-            st.rerun()
-        elif st.session_state.events:
-            if st.session_state.mode == "Scripted (no LLM)":
-                box.caption("Scripted run: tools called in a fixed order, no language model.")
-            for e in pair_tool_calls(st.session_state.events):
-                render_event(e, box)
-        else:
-            box.markdown(_notice("Pick a scenario on the left and press <b>Run</b>.", "neutral",
-                                 heading="Awaiting an incoming return"), unsafe_allow_html=True)
-    with right:
-        st.markdown(_label("Case file, actions and approvals"), unsafe_allow_html=True)
-        case_panel()
-with tab2:
-    impact_tab()
-with tab3:
-    architecture_tab()
-with tab4:
-    agent_evaluation_panel()
+render_workspace(render_event, pair_tool_calls, {
+    'Historical rule replay': impact_tab,
+    'Agent evaluation': agent_evaluation_panel,
+    'AWS architecture': architecture_tab,
+})

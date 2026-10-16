@@ -1,9 +1,9 @@
 # Current repository structure
 
-The supported application on `agent` runs from the repository root.
+The supported application runs from the repository root. `new-ui-code` contains the operations workspace described in [UI_WORKSPACE.md](UI_WORKSPACE.md).
 
 ```text
-app.py                         Streamlit UI: investigation, approvals, verification and evaluation
+app.py                         Streamlit entry point, styling and supporting analysis
 run_demo.py                    CLI: incoming return or existing-case verification
 rd/
   agents/
@@ -15,7 +15,9 @@ rd/
     __init__.py                Public imports used by the UI, CLI, checks and tests
   config.py                    Environment settings and repository-relative paths
   data.py                      DuckDB/Athena data access
-  detect.py                    Statistical signal rules
+  detect.py                    Shared statistical signal rules
+  workflow.py                  Grouped daily screening, signal dispatch and replay guards
+  ui.py                        Monitor, case workspace and approval/follow-up screens
   tools.py                     Evidence tools and enforced action authority
   store.py                     JSON or optional DynamoDB demo state
   offline.py                   Fixed-tool baseline without a language model

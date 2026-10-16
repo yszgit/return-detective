@@ -2,7 +2,11 @@
 
 ```mermaid
 flowchart TD
-    UI[Streamlit app.py] --> Pipeline[Triage → Investigator → Response]
+    UI[Streamlit app.py / rd.ui] --> Daily[Grouped daily SQL screening: no model]
+    Daily -->|Explicitly selected new signal| Review[Existing Investigator → Response]
+    UI -->|Prepared examples| Pipeline[Triage → Investigator → Response]
+    Review --> Model[Strands + Amazon Bedrock]
+    Review --> Tools[rd/tools.py + response playbook]
     CLI[run_demo.py] --> Pipeline
     CLI --> Scripted[Scripted local tool sequence]
     Pipeline --> Model[Strands + Amazon Bedrock]
@@ -23,7 +27,7 @@ flowchart TD
 
 `rd/agents/` contains the three agents. Each role owns its prompt and construction in `triage.py`, `investigator.py` or `response.py`. `shared.py` contains Bedrock configuration, trace hooks and complete JSON result parsing; `pipeline.py` coordinates the existing sequential flow. These remain separate Agent instances within one application process. The package exports preserve `from rd.agents import run_pipeline` and the AWS checker's `_model` import.
 
-`rd/detect.py` supplies a statistical screen; it opens an investigation signal rather than proving a root cause. `rd/tools.py` exposes evidence and action tools; the playbook is read from `rd/policy/response_playbook.md`.
+`rd/workflow.py` groups daily screening and serializes dated operations; `rd/ui.py` renders the three business pages. See [workspace semantics](UI_WORKSPACE.md). `rd/detect.py` supplies the shared statistical screen; it opens an investigation signal rather than proving a root cause. `rd/tools.py` exposes evidence and action tools; the playbook is read from `rd/policy/response_playbook.md`.
 
 The shared configuration and scenarios now live in `rd/config.py` and `rd/scenarios.py`. Runtime state defaults to ignored `runtime/`, and local data to ignored `data/synthetic/`. Root `.env` supplies optional non-secret configuration without overriding terminal values.
 
