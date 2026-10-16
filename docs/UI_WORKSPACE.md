@@ -27,8 +27,11 @@ Start with `python -m streamlit run app.py`.
    proposals** opens the approval queue filtered to this case.
 3. **Approvals & follow-up**: record a demo reviewer decision, show the case
    journey, and save a future manual review appointment with date, time, time zone
-   and optional contact email. Email reminders and automatic Agent runs are **not
-   enabled**. A saved appointment is not a queued email or background job.
+   and optional contact email note. In Live mode, **Email reminder to confirmed
+   SNS subscribers** explicitly creates a one-time AWS reminder when configured.
+   Saving without that option is manual. The contact field does not route mail;
+   all confirmed SNS topic subscribers receive the reminder. **Cancel email
+   reminder** cancels the tracked task. No calendar plan automatically runs an Agent.
    **Historical follow-up replay** is a separate collapsed section. Existing coverage, minimum-observation,
    pending-approval and recorded-intervention checks still apply. Persistent
    signals reuse the case; observed normal signals can close it under the

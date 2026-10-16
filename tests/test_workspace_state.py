@@ -62,6 +62,34 @@ class WorkspaceStateTests(unittest.TestCase):
         self.assertEqual(self.store.snapshot(), before)
         self.assertTrue(self.report.exists())
 
+    def test_clear_cancels_cloud_reminders_and_restore_does_not_rearm_them(self):
+        reminders = importlib.import_module('rd.reminders')
+        cid = next(iter(self.store.snapshot()['cases']))
+        plan = {'email_delivery': 'SCHEDULED', 'reminder': {'name': 'fixture', 'state': 'SCHEDULED'}}
+        self.store.update_case(cid, review_plan=plan)
+        def cancel(case):
+            changed = {**case['review_plan'], 'email_delivery': 'CANCELLED',
+                       'reminder': {'name': 'fixture', 'state': 'CANCELLED'}}
+            self.store.update_case(case['case_id'], review_plan=changed)
+        with patch.object(reminders, 'cancel', side_effect=cancel) as cancelled:
+            result = self.module.clear_saved_cases()
+        cancelled.assert_called_once()
+        self.module.restore_backup(result['backup_path'])
+        self.assertEqual(self.store.get_case(cid)['review_plan']['email_delivery'], 'CANCELLED')
+
+    def test_reminder_cancellation_failure_stops_case_deletion(self):
+        reminders = importlib.import_module('rd.reminders')
+        cid = next(iter(self.store.snapshot()['cases']))
+        self.store.update_case(cid, review_plan={'email_delivery': 'SCHEDULED', 'reminder': {'name': 'fixture'}})
+        before = self.store.snapshot()
+        with patch.object(reminders, 'cancel', side_effect=ValueError('fixture AWS cancellation failed')), \
+             patch.object(self.store, 'reset', wraps=self.store.reset) as reset:
+            with self.assertRaisesRegex(ValueError, 'cancellation failed'):
+                self.module.clear_saved_cases()
+        reset.assert_not_called()
+        self.assertEqual(self.store.snapshot(), before)
+        self.assertIsNotNone(self.module.latest_backup())
+
     def test_restore_refuses_another_workspace_or_nonempty_store(self):
         result = self.module.clear_saved_cases()
         with patch.object(self.store, '_NAMESPACE', 'other-workspace'), self.assertRaises(ValueError):

@@ -35,8 +35,8 @@ This is a single-process demo safeguard, not exactly-once delivery. Standard SNS
 can redeliver. A process interrupted in `PUBLISHING` requires operator inspection,
 and concurrent deployments require a transactional outbox or equivalent claim.
 
-This feature is immediate, not a future review reminder. It does not provision
-EventBridge schedules, send approval follow-up alerts, or execute retail actions.
+This feature is immediate. The separate [review reminder integration](REVIEW_REMINDERS.md)
+creates explicit EventBridge schedules. Neither feature executes retail actions.
 Historical case dates remain explicit in the email even though it is sent now.
 
 To verify end to end, restart with a valid AWS session and Topic ARN, choose

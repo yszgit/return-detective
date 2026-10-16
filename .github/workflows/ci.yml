@@ -19,6 +19,7 @@ jobs:
       RD_MODEL_ID: ''
       RD_FAST_MODEL_ID: ''
       RD_SNS_TOPIC_ARN: ''
+      RD_SCHEDULER_ROLE_ARN: ''
       AWS_EC2_METADATA_DISABLED: 'true'
     steps:
       - uses: actions/checkout@v4

@@ -1,6 +1,6 @@
 """Calendar plans for human review, separate from historical evidence cutoffs.
 
-Saving a plan does not schedule an agent run or send an email.
+Plans can optionally schedule an email reminder; they never schedule an Agent run.
 """
 import datetime as dt
 import re
@@ -36,13 +36,25 @@ def build_plan(date, time, timezone, email='', *, now=None):
             'saved_at': now.astimezone(dt.timezone.utc).isoformat(timespec='seconds')}
 
 
-def save_plan(case_id, date, time, timezone, email='', *, now=None):
+def save_plan(case_id, date, time, timezone, email='', *, now=None, send_email=False):
     case = store.get_case(case_id)
     if not case:
         raise ValueError('The selected case no longer exists.')
     if case['status'] == 'CLOSED':
         raise ValueError('This case is closed. Select an open case to plan a review.')
     plan = build_plan(date, time, timezone, email, now=now)
+    from . import reminders
+    if send_email:
+        return reminders.schedule(case, plan, now=now)
+    reminders.cancel(case)
     if not store.update_case(case_id, review_plan=plan):
         raise ValueError('The review plan could not be saved.')
     return plan
+
+
+def cancel_reminder(case_id):
+    from . import reminders
+    case = store.get_case(case_id)
+    if not case:
+        raise ValueError('The selected case no longer exists.')
+    return reminders.cancel(case)

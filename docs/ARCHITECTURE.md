@@ -21,6 +21,7 @@ flowchart TD
     Review --> Alerts[Optional immediate SNS case alert]
     UI --> Plan[Future manual review appointment]
     Plan --> Store
+    Plan -->|Explicit email option| Scheduler[EventBridge Scheduler: one-time SNS reminder]
     UI --> Verify[Due-date verification]
     CLI --> Verify
     Verify --> Data
@@ -46,7 +47,7 @@ The shared configuration and scenarios now live in `rd/config.py` and `rd/scenar
 ## Prototype boundaries
 
 - Live Bedrock and Athena adapters exist; this reorganization does not verify account access or model behavior.
-- Business actions are demo records in the selected store. No real refund, stock hold, supplier message or customer outreach is executed. Follow-up checks run when triggered from the UI/CLI; no background cloud scheduler is deployed.
+- Business actions are demo records in the selected store. No real refund, stock hold, supplier message or customer outreach is executed. Agent follow-up checks run when triggered from the UI/CLI. Optional one-time review emails use EventBridge Scheduler and do not execute Agents or retail actions.
 - The optional DynamoDB adapter persists demo records but reads and rewrites a namespace without cross-table transactions. Immediate SNS case alerts are optional and real when configured; email delivery is not established by SNS acceptance. Approval identity is not authenticated; neither backend is a multi-user production workflow.
 - Dated operations share a process lock because the tools' replay date is process-global. The query cache is bounded. Separate application processes need separate case namespaces; production users need transactional, request-scoped state.
 - Official v2 uses strictly prior-day baselines and date-bounded return/exchange/transaction lookups. Undated fees, flags, final statuses and shipped quantities remain snapshot facts, not historical features; population return rates and unverified financial execution are unavailable. Legacy synthetic/v1 keeps its compatibility baseline.

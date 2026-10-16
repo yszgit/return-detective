@@ -182,6 +182,51 @@ class SyntheticPipelineTest(unittest.TestCase):
         self.assertTrue(Path(self.data_dir, "runtime", "evaluation", "cases_backtest.csv").is_file())
         self.assertEqual(historical.read_bytes(), original)
 
+    def test_live_review_email_requires_explicit_opt_in_and_shows_its_real_recipient(self):
+        code = '''
+import os
+from unittest.mock import patch
+from streamlit.testing.v1 import AppTest
+from rd import store
+case = store.open_case('Fixture', 'Quality', '2026-01-30', 'fixture', 'fixture')
+store.update_case(case['case_id'], root_cause='Unconfirmed fixture explanation', confidence='Low')
+def scheduled(case, plan, **kw):
+    result = {**plan, 'email_delivery': 'SCHEDULED', 'reminder': {'name': 'fixture-schedule',
+        'state': 'SCHEDULED', 'confirmed_recipients': ['confirmed@example.com']}}
+    store.update_case(case['case_id'], review_plan=result)
+    return result
+def cancel(case):
+    if not case.get('review_plan'):
+        return {}
+    plan = {**case['review_plan'], 'email_delivery': 'CANCELLED'}
+    store.update_case(case['case_id'], review_plan=plan)
+    return plan
+with patch('rd.reminders.recipients', return_value=['confirmed@example.com']), patch('rd.reminders.schedule', side_effect=scheduled) as schedule, patch('rd.reminders.cancel', side_effect=cancel):
+    app = AppTest.from_file(os.environ['RD_TEST_APP']).run(timeout=30)
+    next(r for r in app.radio if r.label == 'Workspace').set_value('Approvals & follow-up').run()
+    assert not app.exception, [e.message for e in app.exception]
+    checkbox = next(c for c in app.checkbox if c.label == 'Email reminder to confirmed SNS subscribers')
+    assert not checkbox.disabled and not checkbox.value
+    assert any('confirmed@example.com' in item.value for item in app.caption)
+    checkbox.check()
+    next(b for b in app.button if b.label == 'Save review plan').click().run(timeout=30)
+    assert not app.exception, [e.message for e in app.exception]
+    schedule.assert_called_once()
+    assert store.get_case(case['case_id'])['review_plan']['email_delivery'] == 'SCHEDULED'
+    assert any('Email reminder scheduled in AWS' in item.value for item in app.success)
+    next(b for b in app.button if b.label == 'Cancel email reminder').click().run()
+    assert not app.exception, [e.message for e in app.exception]
+    assert store.get_case(case['case_id'])['review_plan']['email_delivery'] == 'CANCELLED'
+'''
+        with tempfile.TemporaryDirectory() as folder:
+            env = dict(os.environ, RD_TEST_APP=os.path.abspath(os.path.join(APP, 'app.py')),
+                       RD_BACKEND='duckdb', RD_STORE_BACKEND='json', RD_DATASET_VERSION='1',
+                       RD_DATA_DIR=self.data_dir, RD_RUNTIME_DIR=folder, RD_RECORDED_REPLAY='',
+                       RD_MODEL_ID='fixture-model', RD_SNS_TOPIC_ARN='arn:aws:sns:us-east-1:123456789012:test',
+                       RD_SCHEDULER_ROLE_ARN='arn:aws:iam::123456789012:role/test-role')
+            result = subprocess.run([sys.executable, '-c', code], env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_ui_handles_missing_data_and_scripted_synthetic_run(self):
         code = '''
 import os

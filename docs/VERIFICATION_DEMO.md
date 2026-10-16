@@ -88,5 +88,8 @@ contains an actual six-case Bedrock/rules run with source-report hashes and orig
 checks. It is synthetic functional acceptance, not real-world accuracy. New runs
 must use their own matching data hash and must not be substituted for measured results.
 
-The separate **Future review plan** saves a real-calendar manual appointment;
-email reminders and automatic Agent runs are not enabled by saving that form.
+The separate **Future review plan** saves a real-calendar human appointment.
+The explicit email option creates a one-time AWS reminder in Live mode when
+configured; otherwise the appointment is manual. Email goes to confirmed SNS
+subscribers, not to the optional contact note. Automatic Agent runs are never
+enabled by this form. See [reminder setup](../aws/REVIEW_REMINDERS.md).

@@ -530,14 +530,32 @@ def case_workspace(snapshot, scripted, render_event, pair_tool_calls):
     _technical(render_event, pair_tool_calls, case, trace)
 
 
-def _review_plan(case):
+@st.cache_data(ttl=60, show_spinner=False)
+def _reminder_recipients(config):
+    from .reminders import recipients
+    return recipients(config)
+
+
+def _review_plan(case, scripted=False):
     from zoneinfo import ZoneInfo
-    from .review_plans import save_plan
+    from .review_plans import save_plan, cancel_reminder
+    from . import reminders
     cid = case['case_id']
     plan = case.get('review_plan') or {}
     st.subheader('Future review plan')
-    st.info('Email reminders: not enabled. Saving a plan records a manual review appointment only; '
-            'it does not send an email or automatically run an Agent. The contact email is optional.')
+    ready = reminders.configured() and not scripted and not _recorded()
+    st.info('A review is a human appointment. Enable the email option below to create an AWS reminder; '
+            'it never runs an Agent or approves an action. Email goes to this SNS topic’s confirmed subscribers, '
+            'not to an arbitrary contact address.')
+    if ready:
+        try:
+            subscribers = _reminder_recipients(reminders.settings())
+        except Exception as exc:
+            ready = False
+            code = getattr(exc, 'response', {}).get('Error', {}).get('Code') or str(exc)
+            st.warning('Could not verify the reminder recipients: ' + code)
+        else:
+            st.caption('Current confirmed email recipients: ' + ', '.join(subscribers))
     zones = ['America/Toronto', 'UTC', 'America/Vancouver', 'Europe/London']
     timezone = plan.get('timezone', zones[0])
     if timezone not in zones:
@@ -547,23 +565,62 @@ def _review_plan(case):
     if plan:
         due = dt.datetime.fromisoformat(plan['review_at_utc']) <= now
         st.success(f"{'Due for manual review' if due else 'Plan saved'} · {plan['local_at']} · {timezone}")
-        st.caption('No email has been queued or sent. Review the case manually at the planned time.')
+        delivery = plan.get('email_delivery', 'NOT_ENABLED')
+        reminder = plan.get('reminder') or {}
+        if delivery == 'SCHEDULED':
+            if due:
+                st.info('The AWS reminder time has passed. Execution and inbox delivery are not confirmed by this page.')
+            else:
+                st.success('Email reminder scheduled in AWS. It can run while this browser is closed.')
+            st.caption('Confirmed SNS recipients at scheduling: ' + ', '.join(reminder.get('confirmed_recipients', [])))
+            st.caption('AWS triggers within the selected minute; email delivery can take longer. Inbox delivery is not guaranteed.')
+        elif delivery in ('UNCONFIRMED', 'PREPARING'):
+            st.warning('Reminder scheduling is unconfirmed. It may already exist in AWS; cancel it or save again before relying on it.')
+            if reminder.get('error'):
+                st.caption('Scheduling status: ' + reminder['error'])
+        elif delivery == 'CANCELLED':
+            st.caption('Email reminder cancelled. The manual review appointment remains saved.')
+        else:
+            st.caption('No email has been queued or sent. Review the case manually at the planned time.')
+        if reminder.get('name') and delivery != 'CANCELLED':
+            if st.button('Cancel email reminder', key='cancel_reminder_' + cid, disabled=scripted or _recorded()):
+                try:
+                    with workflow.exclusive_run():
+                        cancel_reminder(cid)
+                except ValueError as exc:
+                    st.error(str(exc))
+                else:
+                    st.session_state.notice = 'Email reminder cancelled. Already-triggered messages cannot be recalled.'
+                    st.rerun()
+    if not ready:
+        st.caption('Email scheduling is unavailable in scripted/recorded mode or until the AWS reminder role is configured.')
     with st.form('review_plan_' + cid):
         date_column, time_column = st.columns(2)
         date = date_column.date_input('Future review date', default.date(), key='future_date_' + cid)
-        time = time_column.time_input('Review time', default.time().replace(tzinfo=None, second=0, microsecond=0), key='future_time_' + cid)
+        time = time_column.time_input('Review time', default.time().replace(tzinfo=None, second=0, microsecond=0), step=60, key='future_time_' + cid)
         timezone = st.selectbox('Time zone', zones, index=zones.index(timezone), key='future_zone_' + cid)
         email = st.text_input('Review contact email (optional)', value=plan.get('contact_email', ''),
-                              placeholder='Email reminders are not enabled', key='review_email_' + cid)
-        saved = st.form_submit_button('Save review plan', type='primary', disabled=_recorded() or case['status'] == 'CLOSED')
+                              help='A contact note only. Reminder delivery uses confirmed SNS subscribers.', key='review_email_' + cid)
+        send_email = st.checkbox('Email reminder to confirmed SNS subscribers',
+            value=ready and plan.get('email_delivery') == 'SCHEDULED', disabled=not ready,
+            key='send_review_email_' + cid)
+        has_cloud_plan = bool((plan.get('reminder') or {}).get('name')) and plan.get('email_delivery') != 'CANCELLED'
+        saved = st.form_submit_button('Save review plan', type='primary',
+            disabled=_recorded() or case['status'] == 'CLOSED' or (has_cloud_plan and not ready))
     if saved:
         try:
             with workflow.exclusive_run():
-                save_plan(cid, date, time, timezone, email)
+                saved_plan = save_plan(cid, date, time, timezone, email, send_email=send_email)
         except ValueError as exc:
             st.error(str(exc))
         else:
-            st.session_state.notice = 'Review plan saved. Email reminders and automatic Agent runs are not enabled.'
+            state = saved_plan['email_delivery']
+            if state == 'SCHEDULED':
+                st.session_state.notice = 'Review plan saved and email reminder scheduled in AWS. No automatic Agent run is scheduled.'
+            elif state in ('PREPARING', 'UNCONFIRMED'):
+                st.session_state.notice = {'tone': 'warning', 'text': 'Plan saved, but email scheduling is unconfirmed. Inspect its status before relying on it.'}
+            else:
+                st.session_state.notice = 'Manual review plan saved. No email reminder was requested.'
             st.rerun()
     if case['status'] == 'CLOSED':
         st.caption('This case is closed. A new review plan is unavailable.')
@@ -608,7 +665,7 @@ def approvals_and_followup(snapshot, scripted, render_event, pair_tool_calls):
     _tiles([('Awaiting decisions', len(pending)),
             ('Manual review plans', sum(bool(c.get('review_plan')) and c['status'] != 'CLOSED' for c in snapshot['cases'].values())),
             ('Cases closed', sum(c['status'] == 'CLOSED' for c in snapshot['cases'].values()))])
-    st.caption('Workspace totals. Review plans do not enable automatic execution or email delivery.')
+    st.caption('Workspace totals. Email reminders require an explicitly scheduled AWS task; review plans never run Agents automatically.')
     case = _case_picker(snapshot, 'Case to review')
     if not case:
         return
@@ -641,7 +698,7 @@ def approvals_and_followup(snapshot, scripted, render_event, pair_tool_calls):
     st.divider()
     st.subheader('Follow-up desk')
     _timeline(case, snapshot)
-    _review_plan(case)
+    _review_plan(case, scripted)
     _historical_followup(case, pending, scripted)
     _technical(render_event, pair_tool_calls, case)
 
@@ -668,7 +725,7 @@ def _workspace_data_controls(snapshot, available):
         st.caption('Current workspace: ' + (store._NAMESPACE or 'local'))
         st.write(f"{totals['cases']} cases · {totals['approvals']} approvals · {totals['actions']} action records")
         st.caption('Clears this workspace’s saved cases, approvals, actions and daily screening reports. '
-                   'Source return data and other workspaces are preserved. A local backup is saved first.')
+                   'Tracked email reminders are cancelled first. Source return data and other workspaces are preserved. A local backup is saved first.')
         blocked = not available or _recorded()
         confirmation = st.checkbox('Clear all records listed above',
                                    key=f"delete_confirmation_{st.session_state.get('workspace_revision', 0)}", disabled=blocked)
@@ -697,7 +754,7 @@ def _workspace_data_controls(snapshot, available):
                     st.error('Could not restore the backup: ' + str(exc))
                 else:
                     _reset_workspace_view('Workspace restored from the latest backup. Historical date limits apply again.')
-            st.caption('Restore is available while this workspace is empty.')
+            st.caption('Restore is available while this workspace is empty. Cancelled email reminders must be explicitly scheduled again.')
         if _recorded():
             st.caption('Recorded rehearsal is read-only. Deletion and restoration are disabled.')
 

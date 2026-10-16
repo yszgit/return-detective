@@ -82,6 +82,19 @@ def clear_saved_cases():
                            'state': state, 'day_reports': reports})
         # Verify the persisted backup before any deletion takes place.
         read_backup(path)
+        from .reminders import cancel
+        cancelled = False
+        for case in state['cases'].values():
+            plan = case.get('review_plan') or {}
+            if (plan.get('reminder') or {}).get('name') and plan.get('email_delivery') != 'CANCELLED':
+                cancel(case)  # Failure stops deletion; the original backup already exists.
+                cancelled = True
+        if cancelled:
+            bundle = read_backup(path)
+            state = store.snapshot()
+            bundle['state'] = state
+            _write_json(path, bundle)
+            read_backup(path)
         store.reset()
         if any(counts(store.snapshot()).values()):
             raise ValueError(f'Workspace clearing could not be verified. The backup is saved at {path}.')
@@ -95,6 +108,12 @@ def restore_backup(path):
         bundle = read_backup(path)
         if any(counts(store.snapshot()).values()):
             raise ValueError('Restore is available only while this workspace has no cases, approvals or actions.')
+        # Restore never re-arms a past external email schedule.
+        for case in bundle['state']['cases'].values():
+            plan = case.get('review_plan') or {}
+            if (plan.get('reminder') or {}).get('name'):
+                plan['email_delivery'] = 'CANCELLED'
+                plan['reminder']['state'] = 'CANCELLED'
         store.restore(bundle['state'])
         for report in bundle.get('day_reports', []):
             _write_json(_report_path(report['name']), report['content'])

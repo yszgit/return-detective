@@ -27,6 +27,7 @@ rd/
   ui_evaluation.py              Paired acceptance and historical replay views
   value.py                     Explicit planning-value assumptions
   review_plans.py               Future manual review appointments
+  reminders.py                  Opt-in Scheduler emails and tracked cancellation
   workspace_state.py            Scoped backup, deletion and restoration
   notifications.py             Optional immediate SNS case alerts
   policy/response_playbook.md   Operating policy and authority tiers

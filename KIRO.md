@@ -25,6 +25,6 @@ Rules for any code you write:
 Final project:
 - `main` is the reviewed project. Root `app.py` is the single supported UI; `rd/ui.py` owns its three pages.
 - UI and CLI preserve cases. Explicit deletion/reset creates a local backup. Dated work shares historical guards.
-- Optional SNS case alerts run after new live UI investigations; future calendar plans remain manual, without scheduled email delivery.
+- Optional SNS case alerts run after new live UI investigations. Future human review plans can explicitly schedule an EventBridge Scheduler email to the topic's confirmed subscribers; they never run Agents automatically. See aws/REVIEW_REMINDERS.md.
 - Historical rule results and synthetic acceptance checks do not establish real-world root-cause accuracy or causal savings.
-- Production work remains: transactional/concurrent storage, authenticated approvals, real retail integrations and a durable scheduler. AgentCore deployment is optional and not part of the current app.
+- Production work remains: transactional/concurrent storage, authenticated approvals, real retail integrations and automatic Agent follow-up orchestration. AgentCore deployment is optional and not part of the current app.

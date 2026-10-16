@@ -5,9 +5,10 @@
 Use a dedicated workspace/namespace and progress forward through historical dates.
 For an earlier replay, select a separate workspace or back up and clear the current
 demo workspace through the sidebar controls. Future manual review plans and
-historical follow-up replays are separate: saving a calendar plan does not start
-a scheduler or promise a future email. Configured SNS sends immediate case alerts
-after a successful live investigation.
+historical follow-up replays are separate. The explicit email option creates a
+one-time AWS reminder to confirmed SNS subscribers; a plain calendar plan is
+manual. Neither option automatically runs an Agent. Configured SNS also sends
+immediate case alerts after a successful live investigation.
 
 1. Open **Returns monitor**. Explain that all supplied returns for a historical
    day are screened with grouped SQL and zero model calls. Review the counts and

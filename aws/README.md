@@ -8,7 +8,7 @@ Implemented adapters: Amazon Bedrock/Strands (`rd/agents/`), Athena over private
 
 The complete official v2 dataset includes all six business sources. `scripts/export_aws_dataset.py` validates it, generates the nine-table Athena DDL and prints an S3 upload plan; `--execute` uploads only the cleaned release. `athena_v2.sql` is a schema template. Use `RD_DATASET_VERSION=2` and the [v2 guide](../docs/OFFICIAL_DATA_V2.md).
 
-Optional immediate SNS case alerts are implemented; see [SNS.md](SNS.md). Confirmed topic subscriptions and publish permissions belong to the selected account. A successful publish is SNS acceptance, not verified email delivery. Future manual review appointments do not schedule alerts.
+Optional immediate SNS case alerts are implemented; see [SNS.md](SNS.md). Confirmed topic subscriptions and publish permissions belong to the selected account. A successful publish is SNS acceptance, not verified email delivery. Future review appointments can explicitly schedule a one-time email through [EventBridge Scheduler](REVIEW_REMINDERS.md).
 
 Still needed for production: transactional case updates, authenticated human reviewers, approval-reminder workflows, idempotent retail execution and durable verification scheduling. The DynamoDB adapter persists demo records but is not safe for concurrent reviewers. Use the connection checks to verify access to existing or newly provisioned resources. Retail action logs are simulations; SNS publish state is recorded separately.
 

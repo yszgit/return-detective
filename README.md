@@ -76,7 +76,7 @@ See [data contracts](docs/DATA_CONTRACTS.md), [snapshot provenance](data/cleaned
 
 The left sidebar's **Delete / restore cases** button opens scoped backup, deletion and restoration controls. Cases are preserved across runs. Historical operations move forward within a workspace so later case knowledge cannot leak into an earlier replay.
 
-A future calendar review plan saves date, time, time zone and an optional contact email. It does **not** schedule an Agent run or send a future reminder. Immediate SNS case alerts are a separate optional integration.
+A future calendar review plan saves date, time, time zone and an optional contact note. In Live mode, explicitly enable **Email reminder to confirmed SNS subscribers** to create a durable AWS EventBridge Scheduler task. The contact field does not route mail. A plan without this option remains manual; no plan schedules an Agent run. See [reminder setup](aws/REVIEW_REMINDERS.md).
 
 ## Live AWS configuration
 
@@ -87,6 +87,7 @@ Use the actual Workshop region, permitted model/profile ID and authorized resour
 - `RD_BACKEND=athena`, `RD_DATASET_VERSION=2`: query the nine-table official dataset.
 - `RD_STORE_BACKEND=dynamodb`, `RD_STORE_NAMESPACE=<unique-demo-name>`: persist one isolated demo workspace.
 - `RD_SNS_TOPIC_ARN`: optional Standard SNS topic for immediate internal alerts after new live UI investigations; [setup and delivery semantics](aws/SNS.md).
+- `RD_SCHEDULER_ROLE_ARN`: optional exact-topic publisher role for future review emails. `RD_SCHEDULER_GROUP` defaults to `return-detective-reviews`.
 
 Checks:
 
@@ -137,6 +138,6 @@ The supplied 2025 v2 replay has 889 statistical signals and a 55.46% persistence
 - Approval gates are enforced in code. Reviewer names are demo audit labels; approvals, refunds, stock holds, supplier claims and outreach are simulated retail records.
 - Optional SNS publishing is real when configured. SNS acceptance does not prove inbox delivery.
 - Physical root causes need independent evidence. Partial sales coverage does not establish a population return rate.
-- JSON/DynamoDB persistence is a single-process demo store, without transactional multi-user updates, authenticated approvals or a durable scheduler.
+- JSON/DynamoDB persistence is a single-process demo store, without transactional multi-user updates or authenticated approvals. Optional email reminders run in AWS; historical Agent follow-ups remain manually triggered.
 
 [Repository structure](docs/REPOSITORY_STRUCTURE.md) · [Verification loop](docs/VERIFICATION_DEMO.md) · [Release review](docs/RELEASE_REVIEW.md)

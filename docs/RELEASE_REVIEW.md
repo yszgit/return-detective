@@ -63,8 +63,9 @@ Their history is preserved when integrating the reviewed application.
 - Optional SNS publishing is real when configured, but acceptance is not proof
   of inbox delivery. No notification or paid model request was made during this
   release check. Existing measured model examples are documented separately.
-- Future calendar plans are manual plans; no durable scheduler or future email
-  delivery is implemented.
+- At the initial review, calendar plans were manual. The subsequent reminder
+  repair adds explicit one-time Scheduler emails; see [current setup](../aws/REVIEW_REMINDERS.md).
+  Agent follow-ups are still manual.
 - The store supports one application process per workspace; it does not provide
   transactional concurrent updates across servers.
 - Statistical anomalies, confidence labels and persistence proxies do not prove
