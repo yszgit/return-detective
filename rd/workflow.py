@@ -210,7 +210,13 @@ def investigate_signal(candidate, as_of, emit, *, scripted=False):
         if not case:
             raise ValueError('The investigation did not persist a case. Inspect technical details before retrying.')
         store.link_returns(case['case_id'], matching['return_ids'])
-        store.update_case(case['case_id'], screen_evidence=evidence, workflow_error='')
+        finding = result.get('finding') or {}
+        store.update_case(case['case_id'], screen_evidence=evidence, workflow_error='',
+                          key_evidence=finding.get('key_evidence', []),
+                          recommended_actions=finding.get('recommended_actions', []),
+                          investigation_briefing=result.get('briefing'),
+                          assessment_as_of=as_of,
+                          investigation_mode='scripted' if scripted else 'bedrock')
         return {'case_id': case['case_id'], 'outcome': 'INVESTIGATED', **result}
 
 

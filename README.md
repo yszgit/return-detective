@@ -80,6 +80,11 @@ aws/                       Cloud integration status
 
 The monochrome interface has three pages: **Returns monitor**, **Case workspace**, and **Approvals & follow-up**. The main entry point processes a historical day with grouped statistics. Technical traces and supporting analyses are secondary drawers. See [workspace behavior and limits](docs/UI_WORKSPACE.md).
 
+The case workspace includes a transparent planning-value calculator and dated
+assessment changes. A measured six-case Bedrock/rules comparison is available in
+the supporting analysis. See the [final demonstration guide](docs/FINAL_DEMO.md)
+for the evidence, rehearsal sequence and remaining evaluation limits.
+
 - RD_MODEL_ID selects the Investigator model.
 - RD_FAST_MODEL_ID optionally selects another model for Triage and Response. If unset, they use RD_MODEL_ID too.
 - Daily screening makes zero model calls. Selecting an anomaly starts the existing Investigator and Response. Prepared single-return examples retain the Triage → Investigator → Response pipeline.

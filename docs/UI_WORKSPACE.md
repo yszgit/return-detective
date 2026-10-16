@@ -15,6 +15,9 @@ adapters, case store and authority checks. The original interface remains in the
    current likely explanation, owner and proposed next steps. Batch/supplier
    causes and population return rates remain unproven when the source lacks them.
    Raw case JSON, model output and tool calls are inside technical drawers.
+   Model confidence is explicitly uncalibrated; the physical cause remains
+   unconfirmed without independent evidence. Owner briefings, recorded actions
+   and approval decisions are available without opening raw JSON.
 3. **Approvals & follow-up**: record a demo reviewer decision, show the case
    journey, and run a dated follow-up. Existing coverage, minimum-observation,
    pending-approval and recorded-intervention checks still apply. Persistent
@@ -43,12 +46,39 @@ The prepared scenarios, historical analysis, architecture and rule/agent
 comparison remain available in secondary drawers. Saved-example playback never
 restores an old case snapshot over the active store.
 
+## Measured comparison and planning value
+
+`evaluation/results/agent_comparison.json` contains the compact paired result
+from actual Bedrock calls on the six seeded synthetic acceptance cases. It keeps
+original checks and source-report hashes. A documented playbook alias,
+`Merchandising (product content)`, is normalized to `Merchandising`; the original
+fit-case exact-string failure is retained. Both approaches pass the normalized
+acceptance checks; this is functional parity, not measured superiority in
+explanation quality or real-world accuracy. Runtime traces remain ignored.
+
+`evaluation/export_comparison.py --root <run-directory>` rejects mismatched data
+or case sets before exporting. The comparison uses the prepared three-agent
+pipeline; it does not benchmark the monitor's model-free triage cost.
+
+The case-level value planner takes explicit future-return, avoidance, unit-cost,
+labor and intervention assumptions. It shows negative outcomes and sensitivity,
+includes a model/query budget, and exports the assumptions. It does not use
+undated source fees, infer population return rates, or claim realized savings.
+Historical replay no longer annualizes results by a hardcoded two-year divisor
+or presents old fixed Glindafied dates as current v2 evidence.
+
 ## Persistence and replay dates
 
 Cases/actions/approvals continue to use the configured JSON or DynamoDB store.
 The interface never resets the case store on a run. Day reports and technical
 traces are local ignored runtime artifacts, separated by data source and case
 namespace. They are not uploaded to S3 or Git.
+
+`RD_RECORDED_REPLAY=1` labels an isolated saved rehearsal and disables new
+investigations, case decisions and follow-ups in the UI. The private snapshot
+preparation command is documented in [FINAL_DEMO.md](FINAL_DEMO.md). If an AWS
+connection expires, saved report counts are explicitly marked as saved and the
+unverified investigation queue is unavailable until the connection is restored.
 
 Dates must progress forwards within a workspace containing cases. An earlier
 replay needs a separate workspace; a future case must not leak into a historical

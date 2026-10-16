@@ -17,6 +17,12 @@ ROOT = Path(__file__).resolve().parents[1]
 CASES = Path(__file__).with_name('agent_cases.json')
 
 
+def canonical_owner(owner):
+    """Accept the documented playbook name for Merchandising, not arbitrary substrings."""
+    value = ' '.join(str(owner or '').casefold().split())
+    return {'merchandising (product content)': 'merchandising'}.get(value, value)
+
+
 def score(spec, result, db, repeated_counts=None):
     cases = list(db['cases'].values())
     checks = {
@@ -29,7 +35,7 @@ def score(spec, result, db, repeated_counts=None):
                 for p in db['approvals']))
             for a in db['actions'])}
     if spec.get('expected_owner'):
-        checks['owner'] = len(cases) == 1 and cases[0]['owner_team'] == spec['expected_owner']
+        checks['owner'] = len(cases) == 1 and canonical_owner(cases[0]['owner_team']) == canonical_owner(spec['expected_owner'])
     if spec.get('repeat'):
         checks['no_duplicate_case'] = len(cases) == 1
         checks['no_duplicate_actions_or_approvals'] = repeated_counts == (
@@ -112,8 +118,9 @@ def main(argv=None):
     if data_dir.exists() and any(data_dir.iterdir()) and not (data_dir / '_SYNTHETIC.txt').is_file():
         parser.error('refusing to overwrite a non-synthetic dataset')
     args.out.mkdir(parents=True, exist_ok=True)
+    generator_env = dict(os.environ, RD_BACKEND='duckdb', RD_DATASET_VERSION='1', RD_STORE_BACKEND='json')
     subprocess.run([sys.executable, str(ROOT / 'scripts/generate_synthetic_data.py'), '--out', str(data_dir)],
-                   cwd=ROOT, check=True)
+                   cwd=ROOT, env=generator_env, check=True)
     dataset_hash = hashlib.sha256((data_dir / 'returns.parquet').read_bytes()).hexdigest()
     reports = []
     for spec in specs:

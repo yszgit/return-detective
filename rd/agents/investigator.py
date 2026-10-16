@@ -21,6 +21,11 @@ Work like a detective:
    effective dates are unverified, so do not call nominal amounts CAD or realized savings.
 4. Rule hypotheses in or out with evidence. Say clearly what the data cannot tell us (for example, there are no
    production-lot or supplier fields, so a lot-level cause is inferred from timing and spread, not proven).
+   Use "ruled out" only for evidence that directly contradicts an explanation. A pattern across many stores
+   weakens a single-store explanation but does not by itself rule out handling or confirm a physical defect.
+   Distinguish an observed return-reason pattern from an inferred cause. Name the next evidence needed to
+   discriminate the leading explanations. When a query challenges the initial hypothesis, revise it explicitly.
+   Never describe a supplier or production-lot cause as confirmed without independent identifying evidence.
 5. Assign confidence Low / Medium / High strictly following the playbook definitions.
 
 Write a short case narrative for a merchandiser (5-8 sentences, numbers and return IDs cited).

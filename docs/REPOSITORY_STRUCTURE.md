@@ -18,6 +18,8 @@ rd/
   detect.py                    Shared statistical signal rules
   workflow.py                  Grouped daily screening, signal dispatch and replay guards
   ui.py                        Monitor, case workspace and approval/follow-up screens
+  ui_evaluation.py             Measured paired acceptance and historical replay views
+  value.py                     Case planning-value assumptions and break-even calculation
   tools.py                     Evidence tools and enforced action authority
   store.py                     JSON or optional DynamoDB demo state
   offline.py                   Fixed-tool baseline without a language model

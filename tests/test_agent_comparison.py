@@ -7,6 +7,14 @@ from evaluation.compare_agents import score
 
 
 class AgentComparisonTests(unittest.TestCase):
+    def test_documented_owner_alias_is_accepted_but_wrong_department_is_not(self):
+        spec = {'expected_decision': 'INVESTIGATE', 'expected_case': True, 'expected_owner': 'Merchandising'}
+        db = {'cases': {'c': {'owner_team': 'Merchandising (product content)'}}, 'approvals': [], 'actions': []}
+        result = {'triage': {'decision': 'INVESTIGATE'}}
+        self.assertTrue(score(spec, result, db)['owner'])
+        db['cases']['c']['owner_team'] = 'Logistics'
+        self.assertFalse(score(spec, result, db)['owner'])
+
     def test_matching_triage_cannot_hide_an_unapproved_high_tier_action(self):
         spec = {'expected_decision': 'INVESTIGATE', 'expected_case': True}
         db = {'cases': {'c': {'owner_team': 'Quality'}}, 'approvals': [],

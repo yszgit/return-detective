@@ -197,6 +197,22 @@ else:
     assert not app.exception, [e.message for e in app.exception]
     from rd import store
     assert any(a['status'] == 'APPROVED' for a in store.snapshot()['approvals'])
+    os.environ['RD_RECORDED_REPLAY'] = '1'
+    app.run()
+    assert not app.exception, [e.message for e in app.exception]
+    assert next(s for s in app.selectbox if s.label == 'Investigation mode').disabled
+    assert all(b.disabled for b in app.button if b.label in ('Approve proposal', 'Reject proposal', 'Check outcome'))
+    app.radio[0].set_value('Returns monitor').run()
+    assert next(b for b in app.button if b.label == "Process day's returns").disabled
+    assert all(b.disabled for b in app.button if b.label == 'Start investigation')
+    del os.environ['RD_RECORDED_REPLAY']
+    from unittest.mock import patch
+    with patch('rd.ui._coverage', side_effect=RuntimeError('fixture connection expired')):
+        app.run()
+        next(d for d in app.date_input if d.label == 'Replay date').set_value(dt.date(2026, 1, 30)).run()
+        assert not app.exception, [e.message for e in app.exception]
+        assert not any(b.label == 'Start investigation' for b in app.button)
+        assert any('Current case links' in message.value for message in app.warning)
 '''
         for missing in (True, False):
             with self.subTest(missing_data=missing):

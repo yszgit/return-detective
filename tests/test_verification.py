@@ -89,6 +89,7 @@ class VerificationTests(unittest.TestCase):
         with patch.object(pipeline, 'investigate_and_respond', side_effect=review) as investigate:
             result = self.verification.check_case(self.cid, '2025-01-22')
             self.assertEqual(result['outcome'], 'REOPENED')
+            self.assertEqual(result['previous_confidence'], 'High')
             self.verification.check_case(self.cid, '2025-01-22')
         investigate.assert_called_once()
         case = self.store.get_case(self.cid)

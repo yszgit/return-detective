@@ -8,25 +8,15 @@ The operations workspace separates monitoring, case evidence, and approvals/foll
 """
 import html
 import json
-import os
 import re
 
 import pandas as pd
 import streamlit as st
 
 from rd import store
-from rd.data import rows, lit
-from rd.config import BACKEND, BACKTEST_PATH, data_available, is_synthetic
-
-BACKTEST = BACKTEST_PATH
-
-SYNTHETIC = is_synthetic() or (BACKEND == "duckdb" and not data_available())
 # Agent identity: roman numeral + short name (no colour coding, no icons).
 AGENT_STYLE = {"Triage Agent": ("I", "Triage"), "Investigator Agent": ("II", "Investigator"),
                "Response Agent": ("III", "Response"), "System": ("", "System")}
-
-# Palette (strict monochrome)
-BLACK, CHARCOAL, GREY, DASH, HAIR, FILL, WHITE = "#000000", "#333333", "#767676", "#BDBDBD", "#E6E6E6", "#F5F5F5", "#FFFFFF"
 
 # Browser-tab icon: white "ALDO" on a black tile (inline SVG data URI, no extra file).
 ALDO_ICON = ("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA2NCc+PHJlY3Qgd2lkdGg9JzY0JyBoZWlnaHQ9JzY0JyByeD0nMTAnIGZpbGw9J2JsYWNrJy8+PHRleHQgeD0nMzInIHk9JzQwJyBmb250LWZhbWlseT0nQXJpYWwsSGVsdmV0aWNhLHNhbnMtc2VyaWYnIGZvbnQtd2VpZ2h0PSc3MDAnIGZvbnQtc2l6ZT0nMTgnIHRleHQtYW5jaG9yPSdtaWRkbGUnIGZpbGw9J3doaXRlJz5BTERPPC90ZXh0Pjwvc3ZnPg==")
@@ -40,7 +30,7 @@ st.markdown("""
 .stApp {background: var(--white); color: var(--ink); font-family: 'Jost', sans-serif; accent-color: var(--ink);}
 .stApp button, .stApp input, .stApp textarea, .stApp select {font-family: 'Jost', sans-serif;}
 header[data-testid="stHeader"] {background: var(--white);}
-.block-container {padding: 3.75rem 3rem 6rem 3rem !important; max-width: none;}
+.block-container {padding: 3.25rem 3rem 4rem 3rem !important; max-width: none;}
 h1, h2, h3, h4, h5, h6 {font-family: 'Jost', sans-serif !important; font-weight: 400 !important;
                         color: var(--ink) !important; letter-spacing: 0 !important;}
 .stMarkdown p, .stMarkdown li {font-family: 'Jost', sans-serif; font-weight: 400; line-height: 1.7; color: var(--ink);}
@@ -72,8 +62,8 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {color: var(--g
 .rd-bar {background: var(--ink); color: var(--white); margin: 0 -3rem; padding: 0.55rem 3rem; text-align: center;
          font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 400; line-height: 1.4;}
 .rd-bar .dot {padding: 0 0.7rem;}
-.rd-mast {margin: 0 -3rem 2.2rem -3rem; padding: 1.7rem 3rem 1.5rem 3rem; border-bottom: 1px solid var(--hair); text-align: center;}
-.rd-wordmark {font-family: 'Jost', sans-serif; font-weight: 600; font-size: 2.6rem; line-height: 1; letter-spacing: 0.04em;
+.rd-mast {margin: 0 -3rem 0.8rem -3rem; padding: 0.65rem 3rem; border-bottom: 1px solid var(--hair); text-align: center;}
+.rd-wordmark {font-family: 'Jost', sans-serif; font-weight: 600; font-size: 1.45rem; line-height: 1; letter-spacing: 0.04em;
               text-transform: uppercase; color: var(--ink);}
 @media (max-width: 640px) {
   .block-container {padding-left: 1rem !important; padding-right: 1rem !important;}
@@ -81,7 +71,16 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {color: var(--g
   .rd-mast {margin-left: -1rem; margin-right: -1rem; padding-left: 1rem; padding-right: 1rem;}
   .rd-wordmark {font-size: 1.8rem;}
 }
-.rd-sub {font-size: 1rem; font-weight: 300; color: var(--char); max-width: 780px; line-height: 1.75; margin: 0 0 2.2rem 0;}
+.rd-sub {font-size: 0.95rem; font-weight: 400; color: var(--char); max-width: 880px; line-height: 1.5; margin: 0 0 0.65rem 0;}
+.rd-page-title {font-size: 1.8rem !important; margin: 0.15rem 0 0.4rem !important; padding: 0 !important;}
+.rd-kpis {display:grid; grid-template-columns:repeat(var(--count),minmax(0,1fr)); gap:12px; margin:0.6rem 0;}
+.rd-kpi-label {font-size:0.8rem; line-height:1.3; min-height:2.4em; color:var(--char);}
+.rd-kpi-value {font-size:2rem; line-height:1.15; font-weight:400; overflow-wrap:anywhere;}
+@media (max-width:600px) {
+  .rd-kpis {gap:8px;}
+  .rd-kpi-label {font-size:0.68rem;}
+  .rd-kpi-value {font-size:1.35rem;}
+}
 .rd-agents {display: flex; flex-wrap: wrap; gap: 3rem; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--hair);
             padding: 1rem 0; margin: 0 0 2.2rem 0;}
 .rd-agents .a {display: flex; align-items: baseline; gap: 0.7rem;}
@@ -350,134 +349,13 @@ def pair_tool_calls(events):
 
 
 def agent_evaluation_panel():
-    from rd.config import RUNTIME_DIR
-    root = RUNTIME_DIR / 'evaluation' / 'agent_comparison'
-    st.subheader('Rules and agents on the same cases')
-    st.caption('Seeded synthetic acceptance checks. Explanation quality requires human review; these are not real-world accuracy or savings estimates.')
-    reports = []
-    for mode in ('rules', 'agent'):
-        path = root / mode / 'summary.json'
-        if path.is_file():
-            reports.append(json.loads(path.read_text(encoding='utf-8')))
-    if not reports:
-        st.info('Generate the fixed-tool baseline: python evaluation/compare_agents.py --mode rules')
-        st.caption('Then run the same cases with --mode agent --allow-model-calls from your configured Workshop terminal.')
-        return
-    if len(reports) == 2 and reports[0]['dataset_sha256'] != reports[1]['dataset_sha256']:
-        st.warning('These runs used different data snapshots and must not be treated as a paired comparison.')
-    if len(reports) == 2 and {r['name'] for r in reports[0]['results']} != {r['name'] for r in reports[1]['results']}:
-        st.warning('These runs cover different cases. Compare matching case rows, not their aggregate pass rates.')
-    for report in reports:
-        st.markdown('**Fixed tools and playbook**' if report['mode'] == 'rules' else '**Bedrock agents**')
-        st.caption(f"Acceptance checks passed: {report['passed']} / {report['cases']}")
-        st.dataframe(pd.DataFrame(report['results']), hide_index=True, width='stretch')
-    if not any(r['mode'] == 'agent' for r in reports):
-        st.info('No live-agent benchmark has been recorded yet. The rules result alone does not establish Agent improvement.')
-
-
-# ------------------------------------------------------------------ impact tab
-@st.cache_data(show_spinner=False)
-def glindafied_weeks():
-    r = rows(f"""select date_trunc('week', return_date) as week_start, count(*) as all_returns,
-                        sum(case when category = 'Quality' then 1 else 0 end) as quality_returns
-                 from returns where style = {lit('Glindafied')}
-                   and return_date >= DATE '2024-10-01' and return_date <= DATE '2025-03-31'
-                 group by date_trunc('week', return_date) order by week_start""")
-    df = pd.DataFrame(r)
-    df["week_start"] = pd.to_datetime(df["week_start"].astype(str).str[:10])
-    return df
-
-
-@st.cache_data(show_spinner=False)
-def backtest():
-    df = pd.read_csv(BACKTEST)
-    both = df.dropna(subset=["report_date"]).copy()
-    both["lead_days"] = (pd.to_datetime(both.report_date) - pd.to_datetime(both.flag_date)).dt.days
-    return df, both
+    from rd.ui_evaluation import render_comparison
+    render_comparison()
 
 
 def impact_tab():
-    if SYNTHETIC:
-        st.markdown(_notice("Synthetic demo data is used for functional checks. Historical ALDO impact numbers do not describe this dataset.", "plain"), unsafe_allow_html=True)
-        st.caption("The historical backtest is preserved in evaluation/results/. See evaluation/README.md for its limitations.")
-        return
-    if not data_available():
-        st.markdown(_notice("Prepare local data or configure Athena to explore impact.", "plain"), unsafe_allow_html=True)
-        return
-    if not BACKTEST.is_file():
-        st.markdown(_notice("No backtest results found. See evaluation/README.md to generate and select a result file.", "plain"), unsafe_allow_html=True)
-        return
-    st.caption("Rule replay for the selected result file. Persistence is not confirmed root-cause accuracy; these figures are not measured savings.")
-    df, both = backtest()
-    tiles = [
-        (f"#{int(both.returns_at_flag.median())}", "related return at which the statistical screen flags a signal",
-         f"vs #{int(both.returns_at_report.median())} with a monthly report"),
-        (f"{int(both.lead_days.median())} days", "earlier detection (median)", "same cases, same data"),
-        (f"{len(df):,}", "statistical signals in the evaluated period", f"{(df.category == 'Quality').sum()} quality, "
-         f"{df.category.str.startswith('Fit').sum()} fit"),
-        (f"{df.report_date.isna().sum():,}", "signals a monthly report never catches", "too small per month to show up"),
-    ]
-    st.markdown(_label("Historical rule replay"), unsafe_allow_html=True)
-    cols = st.columns(4, gap="large")
-    for col, (big, label, sub) in zip(cols, tiles):
-        col.markdown(_metric(html.escape(big), html.escape(label), html.escape(sub)), unsafe_allow_html=True)
-
-    if "sustained_next_28d" in df:
-        st.caption(f"Honest signal quality: only {df.sustained_next_28d.mean():.0%} of raw statistical flags are still present "
-                   f"28 days later ({df[df.category == 'Quality'].sustained_next_28d.mean():.0%} for quality). That is why a flag "
-                   "only opens a case: the Investigator Agent decides confidence, and stock holds, supplier claims and "
-                   "customer outreach need High confidence plus human approval.")
-    st.markdown('<div class="rd-h">Glindafied: when would we have known?</div>'
-                '<div class="rd-h-sub">Weekly defective returns, October 2024 to March 2025</div>', unsafe_allow_html=True)
-    import altair as alt
-    w = glindafied_weeks()
-    marks = pd.DataFrame({"date": pd.to_datetime(["2024-10-28", "2024-12-31"]),
-                          "label": ["Return Detective flags (5th defect)", "Monthly report flags (52nd defect)"],
-                          "color": [BLACK, GREY]})
-    bars = alt.Chart(w).mark_bar(color=CHARCOAL, size=14).encode(
-        x=alt.X("week_start:T", title="Week"), y=alt.Y("quality_returns:Q", title="'Defective / poor quality' returns"),
-        tooltip=[alt.Tooltip("week_start:T", title="Week of"), alt.Tooltip("quality_returns:Q", title="Quality returns"),
-                 alt.Tooltip("all_returns:Q", title="All returns")])
-    rules = alt.Chart(marks).mark_rule(strokeWidth=1.5).encode(
-        x="date:T", tooltip=["label:N", alt.Tooltip("date:T", title="Date")],
-        color=alt.Color("label:N", scale=alt.Scale(domain=list(marks.label), range=list(marks.color)),
-                        legend=alt.Legend(title=None, orient="top", labelLimit=400, labelFontSize=12,
-                                          symbolType="stroke", symbolStrokeWidth=2)),
-        strokeDash=alt.StrokeDash("label:N", scale=alt.Scale(domain=list(marks.label), range=[[1, 0], [6, 4]]),
-                                  legend=alt.Legend(title=None, orient="top", labelLimit=400, labelFontSize=12,
-                                                    symbolType="stroke", symbolStrokeWidth=2)))
-    chart = ((bars + rules).properties(height=320, background="transparent")
-             .configure(font="Jost")
-             .configure_view(strokeWidth=0)
-             .configure_axis(gridColor=HAIR, domainColor=DASH, tickColor=DASH, labelColor=GREY, titleColor=CHARCOAL,
-                             labelFont="Jost", titleFont="Jost", labelFontSize=11, titleFontSize=11,
-                             titleFontWeight=400, titlePadding=12)
-             .configure_axisX(grid=False)
-             .configure_legend(labelFont="Jost", labelColor=CHARCOAL, padding=0, offset=18))
-    st.altair_chart(chart, width="stretch")
-    st.caption("Legacy v1 Glindafied illustration; these fixed annotations are separate from the current v2 benchmark above. Earlier signals do not establish avoided returns.")
-
-    st.markdown('<div class="rd-h">Value of earlier detection</div>'
-                '<div class="rd-h-sub">Illustrative. Adjust the assumptions.</div>', unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3, gap="large")
-    cost = c1.slider("Cost of one avoidable return to ALDO (CA$)", 10, 80, 30)
-    prevent = c2.slider("Share of returns avoided once the cause is fixed early", 10, 80, 40, format="%d%%")
-    gap = int(both.returns_at_report.sum() - both.returns_at_flag.sum())
-    value = gap * cost * prevent / 100 / 2  # two years of data -> per year
-    never = df[df.report_date.isna()]
-    if "sustained_next_28d" in df:
-        never = never[never.sustained_next_28d]
-    upside = int(never.after_flag.sum()) * cost * prevent / 100 / 2
-    c3.markdown(_metric(f"CA${value:,.0f} / yr",
-                        f"conservative: {gap:,} returns happened between the agent flag and the monthly-report flag (2 yrs)",
-                        extra=f'<div class="plus">+ up to CA${upside:,.0f} / yr</div>'
-                              '<div class="sub">from sustained signals a monthly report never catches</div>'),
-                unsafe_allow_html=True)
-    st.caption("Official v2 fee snapshots do not establish historical charge timing or verified currency. Customer-level refund eligibility and realized savings cannot be inferred from these charts.")
-    with st.expander("Backtest by category"):
-        t = both.groupby("category").agg(cases=("style", "size"), agent_flags_at=("returns_at_flag", "median"),
-                                          report_flags_at=("returns_at_report", "median"), days_earlier=("lead_days", "median"))
-        st.dataframe(t, width="stretch")
+    from rd.ui_evaluation import render_historical_replay
+    render_historical_replay()
 
 
 def architecture_tab():

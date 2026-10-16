@@ -79,6 +79,7 @@ def check_case(case_id, as_of, emit=lambda event: None, *, scripted=False, retry
                 "message": "The signal subsided, but no mitigation was recorded. Do not claim an action worked."}
     result = {"case_id": case_id, "as_of": as_of, "outcome": outcome, **evidence,
               "previous_root_cause": case.get("root_cause"),
+              "previous_confidence": case.get("confidence"),
               "previous_hypotheses": case.get("hypotheses", []),
               "causal_effect_established": False}
     if not checks or checks[-1]['as_of'] != as_of:
@@ -104,7 +105,9 @@ def check_case(case_id, as_of, emit=lambda event: None, *, scripted=False, retry
                        "prior_actions": [a for a in db["actions"] if a["case_id"] == case_id],
                        "prior_approvals": [a for a in db["approvals"] if a["case_id"] == case_id]}
             investigate_and_respond(case["style"], case["category"], as_of, emit,
-                                    "The prior intervention did not remove the signal. Reassess alternatives.",
+                                    "The signal persists in supplied historical observations. Recorded actions are "
+                                    "simulations and do not alter those observations. Reassess alternatives without "
+                                    "attributing change to an intervention.",
                                     case_id=case_id, context=context)
         latest = store.get_case(case_id)
         store.update_case(case_id, verification={**(latest.get("verification") or {}),

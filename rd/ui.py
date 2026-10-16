@@ -20,18 +20,27 @@ STATUSES = {'OPEN': 'Open', 'AWAITING_APPROVAL': 'Awaiting approval', 'ACTIONED'
             'DECLINED': 'Proposals declined', 'REOPENED': 'Reopened', 'CLOSED': 'Closed'}
 
 
+def _recorded():
+    return os.environ.get('RD_RECORDED_REPLAY') == '1'
+
+
 def _escape(value):
     return html.escape(str(value))
 
 
 def _heading(kicker, title, description):
-    st.markdown(f'<div class="rd-label bare">{_escape(kicker)}</div><h1>{_escape(title)}</h1>'
+    st.markdown(f'<div class="rd-label bare">{_escape(kicker)}</div><h1 class="rd-page-title">{_escape(title)}</h1>'
                 f'<p class="rd-sub">{_escape(description)}</p>', unsafe_allow_html=True)
 
 
 def _tiles(items):
-    for column, (label, value) in zip(st.columns(len(items)), items):
-        column.metric(label, value)
+    cards = []
+    for label, value in items:
+        formatted = f'{value:,}' if isinstance(value, int) else value
+        cards.append(f'<div class="rd-kpi"><div class="rd-kpi-label">{_escape(label)}</div>'
+                     f'<div class="rd-kpi-value">{_escape(formatted)}</div></div>')
+    st.markdown(f'<div class="rd-kpis" style="--count:{len(items)}">' + ''.join(cards) + '</div>',
+                unsafe_allow_html=True)
 
 
 def _detail(value):
@@ -138,7 +147,7 @@ def _examples(available, scripted, render_event, pair_tool_calls):
         label = st.selectbox('Incoming return', list(scenarios))
         scenario = scenarios[label]
         st.caption(f"{scenario['blurb']} · Replay date {scenario['as_of']}")
-        if st.button('Run prepared example', disabled=not available or (not scripted and not os.environ.get('RD_MODEL_ID'))):
+        if st.button('Run prepared example', disabled=_recorded() or not available or (not scripted and not os.environ.get('RD_MODEL_ID'))):
             _run_task(lambda emit: workflow.run_example(scenario['return_id'], scenario['as_of'], emit,
                                                        scripted=scripted), 'Running prepared example')
         old_trace = Path(RUNTIME_DIR) / 'traces' / f"{scenario['key']}.json"
@@ -152,11 +161,11 @@ def _examples(available, scripted, render_event, pair_tool_calls):
 
 
 def monitor(date, snapshot, available, scripted, render_event, pair_tool_calls):
-    _heading('01 / Daily operations', 'Every return. One clear queue.',
-             'Replay a day of returns, spot unusual patterns, and send only new signals for investigation.')
+    _heading('01 / Daily operations', 'Returns monitor',
+             'Screen the day, prioritize unusual patterns, and investigate the signals that need a decision.')
     control, description = st.columns([1, 2])
     with control:
-        if st.button("Process day's returns", type='primary', width='stretch', disabled=not available):
+        if st.button("Process day's returns", type='primary', width='stretch', disabled=_recorded() or not available):
             try:
                 with st.spinner('Screening the day with grouped statistics...'):
                     workflow.process_day(date)
@@ -176,26 +185,35 @@ def monitor(date, snapshot, available, scripted, render_event, pair_tool_calls):
                            for r in report['records'] if r['level'] == 'SIGNAL')
         _tiles([('Processed', f"{counts['total']:,}"), ('Normal', counts['normal']), ('Watch', counts['watch']),
                 ('Signal', counts['signal']), ('Needs data', counts['insufficient'])])
-        st.caption(f"{linked_count} signal returns linked to cases · Screened as of {date} · 0 model calls during screening")
+        if available:
+            st.caption(f"{linked_count} signal returns linked to cases · Screened as of {date} · 0 model calls during screening")
+        else:
+            st.warning(f'Saved screening report for {date}. Current case links and queue availability cannot be verified until the connection is restored.')
         st.divider()
-        st.subheader('New signals to investigate')
         candidates = [candidate for candidate in report['candidates']
                       if (candidate['style'], candidate['category']) not in open_cases
-                      or open_cases[(candidate['style'], candidate['category'])].get('workflow_error')]
+                      or open_cases[(candidate['style'], candidate['category'])].get('workflow_error')] if available else []
+        st.subheader(f'Investigation queue · {len(candidates)} new' if available else 'Investigation queue · unavailable')
         if candidates:
-            frame = pd.DataFrame([{'Style': c['style'], 'Signal': c['category'], 'Today': len(c['return_ids']),
-                '28-day category count': c['category_returns'], '28-day style count': c['style_returns'],
-                'Category share': f"{c['category_share']:.1%}", 'Company baseline': f"{c['company_baseline_share']:.1%}",
-                'Lift': f"{c['lift_vs_baseline']:.1f}×"} for c in candidates])
-            st.dataframe(frame, hide_index=True, width='stretch')
-            index = st.selectbox('Select signal', range(len(candidates)),
-                                 format_func=lambda i: f"{candidates[i]['style']} · {candidates[i]['category']}")
-            candidate = candidates[index]
-            if st.button('Start investigation', type='primary', disabled=not scripted and not os.environ.get('RD_MODEL_ID')):
-                _run_task(lambda emit: workflow.investigate_signal(candidate, date, emit, scripted=scripted),
-                          'Investigating the selected signal')
+            table, selection = st.columns([1.8, 1], gap='large')
+            with table:
+                frame = pd.DataFrame([{'Style': c['style'], 'Signal': c['category'],
+                    'Today': len(c['return_ids']), 'Share': f"{c['category_share']:.1%}",
+                    'Lift': f"{c['lift_vs_baseline']:.1f}×"} for c in candidates])
+                st.dataframe(frame, hide_index=True, width='stretch', height=225)
+                st.caption('Sorted by statistical signal strength. This ranking does not estimate financial exposure or prove a cause.')
+            with selection:
+                index = st.selectbox('Select signal', range(len(candidates)),
+                                     format_func=lambda i: f"{candidates[i]['style']} · {candidates[i]['category']}")
+                candidate = candidates[index]
+                st.write(f"**{candidate['category_returns']} of {candidate['style_returns']}** returns in the last 28 days · {candidate['distinct_locations']} locations")
+                st.caption(f"Category share {candidate['category_share']:.1%} · Company baseline {candidate['company_baseline_share']:.1%}")
+                if st.button('Start investigation', type='primary', width='stretch', disabled=_recorded() or not available or (not scripted and not os.environ.get('RD_MODEL_ID'))):
+                    _run_task(lambda emit: workflow.investigate_signal(candidate, date, emit, scripted=scripted),
+                              'Investigating the selected signal')
         else:
-            st.info('No new investigation is waiting for this day. Signals with open cases are already being tracked.')
+            st.info('No new investigation is waiting for this day. Signals with open cases are already being tracked.'
+                    if available else 'Restore the data and case-store connection before starting an investigation.')
         st.subheader('Returns processed today')
         choice = st.selectbox('Show returns', ['Signals', 'All records', 'Watch', 'Needs data', 'Linked to case'])
         records = [{**r, 'case_id': r['case_id'] or
@@ -263,15 +281,72 @@ def _timeline(case, snapshot):
         st.dataframe(pd.DataFrame(history), hide_index=True, width='stretch')
 
 
+def _decision_record(case, snapshot):
+    with st.expander('Actions and decisions', expanded=False):
+        approvals = [a for a in snapshot['approvals'] if a['case_id'] == case['case_id']]
+        if approvals:
+            st.dataframe(pd.DataFrame([{'Proposed action': a['action'], 'Decision': a['status'].title(),
+                'Decision owner': a['approver'], 'Recorded at': a.get('decided_at') or a['requested_at']}
+                for a in approvals]), hide_index=True, width='stretch')
+        actions = [a for a in snapshot['actions'] if a['case_id'] == case['case_id'] and a['tier'] > 0]
+        if actions:
+            st.dataframe(pd.DataFrame([{'Recorded action': a['action'], 'Recorded by': a['executed_by'],
+                                       'Recorded at': a['at']} for a in actions]),
+                         hide_index=True, width='stretch')
+        if not approvals and not actions:
+            st.caption('No action or approval has been recorded yet.')
+        st.caption('These are prototype records. An approved proposal does not establish that a retail action occurred or that returns were prevented.')
+
+
+def _case_value(case):
+    from .value import estimate_case_value
+    with st.expander('Business value · planning assumptions', expanded=False):
+        st.caption('Illustrative inputs for this case. All amounts use CAD as a planning assumption. Source fees, sales coverage and actual savings are not used or inferred.')
+        cid = case['case_id']
+        first, second, third = st.columns(3)
+        future = first.number_input('Future returns exposed (assumed)', min_value=0, value=50, key='future_' + cid)
+        share = second.slider('Avoidable after intervention (assumed)', 0, 100, 30, format='%d%%', key='avoid_' + cid)
+        unit = third.number_input('Cost per avoided return (CAD)', min_value=0.0, value=30.0, key='unit_' + cid)
+        first, second, third = st.columns(3)
+        hours = first.number_input('Review hours saved (assumed)', min_value=0.0, value=1.0, key='hours_' + cid)
+        rate = second.number_input('Review labor per hour (CAD)', min_value=0.0, value=40.0, key='rate_' + cid)
+        intervention = third.number_input('Intervention cost (CAD)', min_value=0.0, value=150.0, key='intervention_' + cid)
+        model = st.number_input('Model and query cost budget (CAD; assumed)', min_value=0.0, value=5.0, key='model_budget_' + cid)
+        assumptions = dict(future_returns=future, unit_cost=unit, hours_saved=hours,
+                           hourly_cost=rate, intervention_cost=intervention, model_cost=model)
+        rows = []
+        for label, fraction in [('Lower avoidance', share / 200), ('Base assumption', share / 100),
+                                ('Higher avoidance', min(1, share * 1.5 / 100))]:
+            result = estimate_case_value(**assumptions, avoidance_share=fraction)
+            rows.append({'Scenario': label, 'Avoidance assumed': f'{fraction:.0%}',
+                         'Avoided returns': result['avoided_returns'],
+                         'Net planning value (CAD)': result['net_planning_value']})
+        result = estimate_case_value(**assumptions, avoidance_share=share / 100)
+        _tiles([('Net planning value', f"CAD {result['net_planning_value']:,.0f}"),
+                ('Break-even avoided returns', result['break_even_avoided_returns']
+                 if result['break_even_avoided_returns'] is not None else 'Unavailable')])
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
+        st.caption('Net = avoided-return cost + labor capacity value − intervention cost − model/query budget. Labor capacity is not automatically cash saved. Avoidance is an unvalidated scenario, not a causal estimate or an annual forecast.')
+        st.download_button('Download assumptions', json.dumps({'case_id': cid,
+            'currency_assumption': 'CAD', 'assumptions': {**assumptions, 'avoidance_share': share / 100},
+            'estimate': result, 'realized_savings_verified': False}, indent=2),
+            file_name=f'{cid}-value-assumptions.json', mime='application/json')
+
+
 def case_workspace(snapshot, scripted, render_event, pair_tool_calls):
-    _heading('02 / Case workspace', 'From a signal to a next step.',
+    _heading('02 / Case workspace', 'Case workspace',
              'See why a case was found, what supports it, and who needs to decide what happens next.')
     case = _case_picker(snapshot)
     if not case:
         return
     cid = case['case_id']
     st.subheader(f"{case['style']} · {case['category']}")
-    st.caption(f"{cid} · {STATUSES.get(case['status'], case['status'])} · Observations as of {case['opened_as_of']}")
+    st.caption(f"{cid} · {STATUSES.get(case['status'], case['status'])} · Opened {case['opened_as_of']} · Latest assessment {case.get('assessment_as_of', case['opened_as_of'])}")
+    if case.get('investigation_mode'):
+        st.caption('Investigation: real Bedrock agents' if case['investigation_mode'] == 'bedrock'
+                   else 'Investigation: fixed tools and playbook; no model used')
+    if case.get('demo_scenario'):
+        st.info(case['demo_scenario'])
     left, right = st.columns([1.5, 1], gap='large')
     with left:
         st.markdown('### Why this was found')
@@ -281,10 +356,16 @@ def case_workspace(snapshot, scripted, render_event, pair_tool_calls):
                     ('Category share', f"{signal['category_share']:.1%}"),
                     ('Company baseline', f"{signal['company_baseline_share']:.1%}")])
             st.caption(f"28-day window ending {signal['as_of']} · {signal['distinct_locations']} locations · This is a category share among returns, not a population return rate.")
-        st.write(case.get('evidence') or case.get('summary') or 'Evidence is still being gathered.')
+        if case.get('key_evidence'):
+            st.markdown(f"#### Investigation evidence · {case.get('assessment_as_of', case['opened_as_of'])}")
+            for fact in case['key_evidence']:
+                st.write('• ' + str(fact))
+        else:
+            st.write(case.get('evidence') or case.get('summary') or 'Evidence is still being gathered.')
         st.markdown('### Current likely explanation')
         st.write(case.get('root_cause') or 'Investigation in progress; an explanation has not been recorded yet.')
-        st.caption(f"Assessment confidence: {case.get('confidence') or 'Not assessed'} · Physical inspection has not been established by this dataset.")
+        st.caption(f"Investigator confidence: {case.get('confidence') or 'Not assessed'} · This confidence is not a calibrated probability.")
+        st.info('Physical cause remains unconfirmed. Return reasons and statistical patterns support an investigation; inspection and operational records are needed to verify the explanation.')
         st.markdown('### Evidence and competing explanations')
         if case.get('hypotheses'):
             st.dataframe(pd.DataFrame([{'Explanation': h.get('hypothesis'), 'Assessment': h.get('verdict'),
@@ -308,17 +389,41 @@ def case_workspace(snapshot, scripted, render_event, pair_tool_calls):
         st.caption('Notifications and retail actions in this prototype are recorded simulations.')
         if case.get('workflow_error'):
             st.warning('The previous investigation was interrupted. Recorded case history is preserved.')
-            if st.button('Retry investigation', disabled=not scripted and not os.environ.get('RD_MODEL_ID')):
+            if st.button('Retry investigation', disabled=_recorded() or (not scripted and not os.environ.get('RD_MODEL_ID'))):
                 _run_task(lambda emit: workflow.investigate_signal(
                     {'style': case['style'], 'category': case['category']}, case['opened_as_of'], emit,
                     scripted=scripted), 'Resuming investigation', cid)
     st.divider()
     _timeline(case, snapshot)
+    if case.get('verification_checks'):
+        with st.expander('How the assessment changed', expanded=False):
+            observations, previous_date = [], case['opened_as_of']
+            for check in case['verification_checks']:
+                observations.append({'Evidence cutoff': previous_date,
+                    'Confidence': check.get('previous_confidence') or 'Not recorded',
+                    'Likely explanation': check.get('previous_root_cause')})
+                previous_date = check['as_of']
+            observations.append({'Evidence cutoff': case.get('assessment_as_of', previous_date),
+                'Confidence': case.get('confidence'), 'Likely explanation': case.get('root_cause')})
+            st.dataframe(pd.DataFrame(observations), hide_index=True, width='stretch')
+            st.caption('These are successive assessments of historical evidence, not measurements of an intervention’s causal effect.')
+    if case.get('investigation_briefing'):
+        with st.expander('Owner briefing', expanded=False):
+            st.write(case['investigation_briefing'])
+    if case.get('policy_comparison'):
+        with st.expander('Same case · fixed policy and Agent', expanded=False):
+            comparison = case['policy_comparison']
+            st.caption(f"Same supplied snapshot and evidence cutoff {comparison['as_of']}; identical initial screening statistics.")
+            st.dataframe(pd.DataFrame(comparison['rows']), hide_index=True, width='stretch')
+            st.write(comparison['observation'])
+            st.caption('This is one observed decision difference. Independent review and physical evidence are needed to decide which assessment is correct; it is not an accuracy estimate.')
+    _decision_record(case, snapshot)
+    _case_value(case)
     _technical(render_event, pair_tool_calls, case)
 
 
 def approvals_and_followup(snapshot, scripted, render_event, pair_tool_calls):
-    _heading('03 / Approvals & follow-up', 'Decisions that move a case forward.',
+    _heading('03 / Approvals & follow-up', 'Approvals & follow-up',
              'Review the proposed action, record a human decision, then check what the next observations show.')
     pending = [a for a in snapshot['approvals'] if a['status'] == 'PENDING']
     _tiles([('Awaiting decisions', len(pending)),
@@ -326,7 +431,7 @@ def approvals_and_followup(snapshot, scripted, render_event, pair_tool_calls):
             ('Cases closed', sum(c['status'] == 'CLOSED' for c in snapshot['cases'].values()))])
     st.subheader('Approval queue')
     st.caption('Demo decisions are recorded under the reviewer name entered here; retail actions remain simulated.')
-    reviewer = st.text_input('Reviewer name', placeholder='Enter your name before recording a decision')
+    reviewer = st.text_input('Reviewer name', placeholder='Enter your name before recording a decision', disabled=_recorded())
     if not pending:
         st.info('No pending approval requests.')
     for approval in pending:
@@ -338,7 +443,7 @@ def approvals_and_followup(snapshot, scripted, render_event, pair_tool_calls):
             approve, reject = st.columns(2)
             for column, label, decision in [(approve, 'Approve proposal', True), (reject, 'Reject proposal', False)]:
                 if column.button(label, key=f"decision_{decision}_{approval['approval_id']}",
-                                 type='primary' if decision else 'secondary', disabled=not reviewer.strip()):
+                                 type='primary' if decision else 'secondary', disabled=_recorded() or not reviewer.strip()):
                     store.decide_approval(approval['approval_id'], decision, reviewer.strip())
                     st.session_state.notice = 'Decision recorded. The case timeline has been updated.'
                     st.rerun()
@@ -351,7 +456,7 @@ def approvals_and_followup(snapshot, scripted, render_event, pair_tool_calls):
     planned = case.get('verification') or {}
     _timeline(case, snapshot)
     if not planned.get('due_on'):
-        if case['status'] != 'CLOSED' and st.button('Schedule follow-up'):
+        if case['status'] != 'CLOSED' and st.button('Schedule follow-up', disabled=_recorded()):
             from .verification import schedule
             with workflow.exclusive_run():
                 schedule(cid, case['opened_as_of'])
@@ -362,7 +467,7 @@ def approvals_and_followup(snapshot, scripted, render_event, pair_tool_calls):
         remaining = any(a['case_id'] == cid for a in pending)
         if remaining:
             st.caption('Resolve this case’s pending proposals before running follow-up.')
-        disabled = remaining or case['status'] == 'CLOSED' or (not scripted and not os.environ.get('RD_MODEL_ID'))
+        disabled = _recorded() or remaining or case['status'] == 'CLOSED' or (not scripted and not os.environ.get('RD_MODEL_ID'))
         retry = bool(case.get('review_error_as_of'))
         if st.button('Retry follow-up' if retry else 'Check outcome', disabled=disabled, type='primary'):
             _run_task(lambda emit: workflow.review_case(cid, chosen.isoformat(), emit,
@@ -399,11 +504,12 @@ def render_workspace(render_event, pair_tool_calls, supporting_analysis):
             default = max(default, dt.date.fromisoformat(latest))
         if minimum and maximum:
             default = min(max(default, minimum), maximum)
-        chosen = st.date_input('Replay date', default, min_value=minimum, max_value=maximum)
-        modes = ['Live agents (Bedrock)', 'Scripted baseline (no model)']
-        mode = st.selectbox('Investigation mode', modes, index=0 if os.environ.get('RD_MODEL_ID') else 1,
+        chosen = st.date_input('Replay date', default, min_value=minimum, max_value=maximum, key='replay_date')
+        modes = ['Recorded Bedrock rehearsal'] if _recorded() else ['Live agents (Bedrock)', 'Scripted baseline (no model)']
+        mode = st.selectbox('Investigation mode', modes, index=0 if _recorded() or os.environ.get('RD_MODEL_ID') else 1,
+                            disabled=_recorded(),
                             key='investigation_mode')
-        scripted = mode == modes[1]
+        scripted = mode == 'Scripted baseline (no model)'
         st.caption('Screening is statistical in both modes. The mode only changes investigations and follow-up.')
         st.divider()
         st.caption('Synthetic dataset' if is_synthetic() else 'Authorized ALDO historical data')
@@ -418,6 +524,8 @@ def render_workspace(render_event, pair_tool_calls, supporting_analysis):
             st.code(connection_error)
     elif not available:
         st.info('Prepared data is unavailable. Generate synthetic data or configure the authorized dataset to continue.')
+    if _recorded():
+        st.info('Recorded Bedrock rehearsal · Viewing saved model results and historical evidence. No new model calls or approval decisions are made in this view.')
     notice = st.session_state.pop('notice', None)
     if notice:
         if isinstance(notice, dict):

@@ -68,4 +68,9 @@ def investigate_and_respond(style, category, as_of, emit, triage_note, *, case_i
                    "Explain what changed and schedule another verification.\n" + json.dumps(context, default=str))
     r_out = invoke_agent(resp, prompt, "Response Agent", emit)
     emit({"agent": "Response Agent", "type": "briefing", "text": r_out})
+    case = store.get_case(case_id) if case_id else store.find_open_case(style, category)
+    if case:
+        store.update_case(case['case_id'], key_evidence=finding.get('key_evidence', []),
+                          investigation_briefing=r_out, assessment_as_of=str(as_of)[:10],
+                          investigation_mode='bedrock')
     return {"finding": finding, "briefing": r_out}
