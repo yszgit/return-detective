@@ -9,17 +9,27 @@ adapters, case store and authority checks. The original interface remains in the
 1. **Returns monitor**: choose a historical date and process all supplied returns
    on that date. The screen uses grouped SQL and makes zero model calls. Its
    normal/watch/signal/data-insufficient counts reconcile to the day's total.
-   Signals are grouped by style and category. Existing cases receive their
+   Flagged counts refer to individual return records; investigation tasks group
+   them by style and category. A flagged record can have a different reason from
+   the style's investigation category. Existing cases receive their
    related return IDs; only new signals are offered for explicit investigation.
 2. **Case workspace**: show the detection evidence, competing explanations,
    current likely explanation, owner and proposed next steps. Batch/supplier
    causes and population return rates remain unproven when the source lacks them.
-   Raw case JSON, model output and tool calls are inside technical drawers.
+   Actual tool names, purposes, results and evidence scopes are visible by default
+   under **Agent investigation steps**. Complete tool inputs/outputs and raw case
+   JSON remain inside technical drawers. Numeric evidence is labeled by window,
+   style/category and channel coverage; samples and return transactions are not
+   presented as the same grain as return records.
    Model confidence is explicitly uncalibrated; the physical cause remains
    unconfirmed without independent evidence. Owner briefings, recorded actions
-   and approval decisions are available without opening raw JSON.
+   and approval decisions are available without opening raw JSON. **Review pending
+   proposals** opens the approval queue filtered to this case.
 3. **Approvals & follow-up**: record a demo reviewer decision, show the case
-   journey, and run a dated follow-up. Existing coverage, minimum-observation,
+   journey, and save a future manual review appointment with date, time, time zone
+   and optional contact email. Email reminders and automatic Agent runs are **not
+   enabled**. A saved appointment is not a queued email or background job.
+   **Historical follow-up replay** is a separate collapsed section. Existing coverage, minimum-observation,
    pending-approval and recorded-intervention checks still apply. Persistent
    signals reuse the case; observed normal signals can close it under the
    existing rules. Observed change does not establish causal savings.
@@ -41,6 +51,11 @@ statistical triage. Prepared single-return examples still use the original
 Triage → Investigator → Response pipeline. Repeating the same signal attaches
 to its open case without another model run. Interrupted investigations that
 have already created a case can be explicitly retried against that case.
+
+Disabled investigation buttons display a reason and remedy: recorded read-only
+mode, unavailable data/store, missing `RD_MODEL_ID`, or an earlier replay date
+than this workspace's case activity. A configured model is not presented as
+proof of Bedrock permissions or current service availability.
 
 The prepared scenarios, historical analysis, architecture and rule/agent
 comparison remain available in secondary drawers. Saved-example playback never
@@ -85,6 +100,11 @@ replay needs a separate workspace; a future case must not leak into a historical
 decision. Dated operations share a nonblocking process lock because the existing
 agent tools share a replay date. Multiple application processes must still use
 separate DynamoDB namespaces. This is not a production transaction system.
+
+Calendar appointments live in the case's `review_plan` field, separate from
+historical `verification.due_on`. They retain local time, IANA time zone and UTC,
+reject past or ambiguous/nonexistent clock-change times, and do not advance the
+historical evidence cutoff. The optional email is a saved contact only.
 
 The reviewer name is a demo audit label, not authenticated identity. Notifications,
 refunds, stock holds, supplier claims and outreach remain proposed or simulated

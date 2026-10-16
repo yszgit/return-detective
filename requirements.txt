@@ -6,3 +6,4 @@ numpy>=1.26,<3
 streamlit>=1.49,<2
 altair>=5,<7
 python-dotenv>=1,<2
+tzdata>=2025.1

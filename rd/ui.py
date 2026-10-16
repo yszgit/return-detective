@@ -14,6 +14,7 @@ import streamlit as st
 from . import store, workflow
 from .config import BACKEND, RUNTIME_DIR, data_available, is_synthetic
 from .scenarios import SCENARIOS
+from .trace_view import cutoff, steps, window_label
 
 PAGES = ['Returns monitor', 'Case workspace', 'Approvals & follow-up']
 STATUSES = {'OPEN': 'Open', 'AWAITING_APPROVAL': 'Awaiting approval', 'ACTIONED': 'Action recorded',
@@ -115,26 +116,64 @@ def _run_task(operation, label, case_id=None):
     st.rerun()
 
 
-def _technical(render_event, pair_tool_calls, case=None):
+def _case_trace(case):
+    directory = Path(RUNTIME_DIR) / 'traces' / workflow.source_key()
+    latest = None
+    for path in sorted(directory.glob('run-*.json'), reverse=True):
+        try:
+            trace = json.loads(path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            continue
+        if trace.get('case_id') == case['case_id']:
+            latest = latest or trace
+            if any(event.get('type') == 'tool_call' for event in trace.get('events', [])):
+                return trace
+    return latest or {'events': []}
+
+
+def _investigation_blocked(available, scripted):
+    if _recorded():
+        return 'Recorded rehearsal is read-only. Open the live workspace to start a new investigation.'
+    if not available:
+        return 'Data or case storage is unavailable. Restore the configured connection and refresh this page.'
+    if not scripted and not os.environ.get('RD_MODEL_ID', '').strip():
+        return ('Live model is not configured: RD_MODEL_ID is empty. Set a permitted Bedrock model in the local .env '
+                'and restart this app, or select Scripted baseline (no model).')
+    return None
+
+
+def _agent_steps(case, trace):
+    st.subheader('Agent investigation steps')
+    rows = steps(trace, case)
+    if not rows:
+        st.caption('No saved tool trace for this case in this workspace. Tool use cannot be verified from the case summary alone.')
+        return
+    st.caption(f"Latest saved tool trace · Evidence cutoff {cutoff(trace) or 'not recorded'} · {len(rows)} actual tool calls. "
+               'Tool success records a result; it does not confirm a physical cause or an executed retail action.')
+    if trace.get('error'):
+        st.warning('This recorded run was interrupted. The steps below show only the tool calls that were saved.')
+    frame = pd.DataFrame(rows).fillna('—')
+    columns = ['Tool', 'Purpose', 'Outcome', 'Evidence scope', 'Agent', 'Step']
+    if 'Observed count' in frame:
+        columns.insert(2, 'Observed count')
+    st.dataframe(frame[columns], hide_index=True, width='stretch', height=350)
+    st.caption('Evidence scope lists the time window, style/category and channels for each evidence tool. '
+               'Different windows, samples and transaction counts are not interchangeable totals.')
+
+
+def _technical(render_event, pair_tool_calls, case=None, trace=None):
     with st.expander('Technical details', expanded=False):
-        if case:
-            st.json(case)
-        if st.checkbox('Show agent tool calls and full output', key='show_trace_' + (case or {}).get('case_id', 'monitor')):
-            events = st.session_state.get('events', [])
-            directory = Path(RUNTIME_DIR) / 'traces' / workflow.source_key()
-            paths = sorted(directory.glob('run-*.json'), reverse=True) if directory.exists() else []
-            if case:
-                events = []
-                for path in paths:
-                    trace = json.loads(path.read_text(encoding='utf-8'))
-                    if trace.get('case_id') == case['case_id']:
-                        events = trace['events']
-                        break
+        trace = trace if trace is not None else _case_trace(case) if case else {'events': st.session_state.get('events', [])}
+        with st.expander('Tool inputs, outputs and saved agent output', expanded=False):
+            events = trace.get('events', [])
             if not events:
                 st.caption('No saved agent trace for this selection in this workspace.')
             box = st.container()
             for event in pair_tool_calls(events):
                 render_event(event, box)
+        if case:
+            with st.expander('Raw case JSON', expanded=False):
+                st.json(case)
 
 
 def _examples(available, scripted, render_event, pair_tool_calls):
@@ -147,7 +186,10 @@ def _examples(available, scripted, render_event, pair_tool_calls):
         label = st.selectbox('Incoming return', list(scenarios))
         scenario = scenarios[label]
         st.caption(f"{scenario['blurb']} · Replay date {scenario['as_of']}")
-        if st.button('Run prepared example', disabled=_recorded() or not available or (not scripted and not os.environ.get('RD_MODEL_ID'))):
+        blocked = _investigation_blocked(available, scripted)
+        if blocked:
+            st.caption(blocked)
+        if st.button('Run prepared example', disabled=bool(blocked)):
             _run_task(lambda emit: workflow.run_example(scenario['return_id'], scenario['as_of'], emit,
                                                        scripted=scripted), 'Running prepared example')
         old_trace = Path(RUNTIME_DIR) / 'traces' / f"{scenario['key']}.json"
@@ -183,22 +225,26 @@ def monitor(date, snapshot, available, scripted, render_event, pair_tool_calls):
                       if case['status'] != 'CLOSED'}
         linked_count = sum(bool(r['case_id'] or open_cases.get((r['style'], r['signal_category'])))
                            for r in report['records'] if r['level'] == 'SIGNAL')
-        _tiles([('Processed', f"{counts['total']:,}"), ('Normal', counts['normal']), ('Watch', counts['watch']),
-                ('Signal', counts['signal']), ('Needs data', counts['insufficient'])])
+        _tiles([('Processed returns', f"{counts['total']:,}"), ('Normal returns', counts['normal']), ('Watch returns', counts['watch']),
+                ('Flagged returns', counts['signal']), ('Needs data', counts['insufficient'])])
+        st.caption(f"Counts above are individual return records dated {date}, across all supplied styles, categories and channels. "
+                   'A flagged return belongs to a style with a statistical signal; its own reason may differ from the investigation category.')
         if available:
-            st.caption(f"{linked_count} signal returns linked to cases · Screened as of {date} · 0 model calls during screening")
+            st.caption(f"{linked_count} flagged return records linked to cases · Screened as of {date} · 0 model calls during screening")
         else:
             st.warning(f'Saved screening report for {date}. Current case links and queue availability cannot be verified until the connection is restored.')
         st.divider()
         candidates = [candidate for candidate in report['candidates']
                       if (candidate['style'], candidate['category']) not in open_cases
                       or open_cases[(candidate['style'], candidate['category'])].get('workflow_error')] if available else []
-        st.subheader(f'Investigation queue · {len(candidates)} new' if available else 'Investigation queue · unavailable')
+        st.subheader(f'Investigation queue · {len(candidates)} tasks' if available else 'Investigation queue · unavailable')
+        st.caption('One investigation task groups a style and a return category. Multiple flagged return records can feed '
+                   'one task; signals with an open case are linked there instead of creating a new task.')
         if candidates:
             table, selection = st.columns([1.8, 1], gap='large')
             with table:
-                frame = pd.DataFrame([{'Style': c['style'], 'Signal': c['category'],
-                    'Today': len(c['return_ids']), 'Share': f"{c['category_share']:.1%}",
+                frame = pd.DataFrame([{'Style': c['style'], 'Investigation category': c['category'],
+                    "Today's return records": len(c['return_ids']), '28-day share': f"{c['category_share']:.1%}",
                     'Lift': f"{c['lift_vs_baseline']:.1f}×"} for c in candidates])
                 st.dataframe(frame, hide_index=True, width='stretch', height=225)
                 st.caption('Sorted by statistical signal strength. This ranking does not estimate financial exposure or prove a cause.')
@@ -206,9 +252,16 @@ def monitor(date, snapshot, available, scripted, render_event, pair_tool_calls):
                 index = st.selectbox('Select signal', range(len(candidates)),
                                      format_func=lambda i: f"{candidates[i]['style']} · {candidates[i]['category']}")
                 candidate = candidates[index]
-                st.write(f"**{candidate['category_returns']} of {candidate['style_returns']}** returns in the last 28 days · {candidate['distinct_locations']} locations")
+                st.write(f"**{candidate['category_returns']} {candidate['category']} / {candidate['style_returns']} total return records**")
+                st.caption(f"{candidate['style']} · {window_label(date, 28)} · All supplied channels / banners · {candidate['distinct_locations']} locations")
                 st.caption(f"Category share {candidate['category_share']:.1%} · Company baseline {candidate['company_baseline_share']:.1%}")
-                if st.button('Start investigation', type='primary', width='stretch', disabled=_recorded() or not available or (not scripted and not os.environ.get('RD_MODEL_ID'))):
+                blocked = _investigation_blocked(available, scripted)
+                latest = workflow.latest_case_date(snapshot['cases'].values())
+                if not blocked and latest and date < latest:
+                    blocked = f'This workspace has case evidence through {latest}. Choose that replay date or later, or use a separate workspace for earlier evidence.'
+                if blocked:
+                    st.info(blocked)
+                if st.button('Start investigation', type='primary', width='stretch', disabled=bool(blocked)):
                     _run_task(lambda emit: workflow.investigate_signal(candidate, date, emit, scripted=scripted),
                               'Investigating the selected signal')
         else:
@@ -244,7 +297,12 @@ def _case_picker(snapshot, label='Select case'):
     ids = [case['case_id'] for case in cases]
     selected = st.session_state.get('selected_case_id')
     index = ids.index(selected) if selected in ids else 0
-    selected = st.selectbox(label, ids, index=index, format_func=lambda cid:
+    key = 'case_picker_' + label
+    if st.session_state.get(key) != ids[index]:
+        st.session_state[key] = ids[index]
+    def changed():
+        st.session_state.selected_case_id = st.session_state[key]
+    selected = st.selectbox(label, ids, key=key, on_change=changed, format_func=lambda cid:
                             f"{snapshot['cases'][cid]['style']} · {snapshot['cases'][cid]['category']} · {cid}")
     st.session_state.selected_case_id = selected
     return snapshot['cases'][selected]
@@ -252,12 +310,11 @@ def _case_picker(snapshot, label='Select case'):
 
 def _timeline(case, snapshot):
     approvals = [a for a in snapshot['approvals'] if a['case_id'] == case['case_id']]
-    planned = case.get('verification') or {}
     decided = sum(a['status'] != 'PENDING' for a in approvals)
     stages = [('Signal detected', case['opened_as_of']),
               ('Investigation', 'Findings recorded' if case.get('root_cause') else 'In progress'),
               ('Human decision', f'{decided}/{len(approvals)} resolved' if approvals else 'No proposals'),
-              ('Follow-up', planned.get('due_on', 'Not scheduled')),
+              ('Review plan', (case.get('review_plan') or {}).get('local_at', 'Not planned')),
               ('Resolution', 'Closed' if case['status'] == 'CLOSED' else 'Open')]
     st.subheader('Case journey')
     for column, (stage, text) in zip(st.columns(5), stages):
@@ -340,6 +397,7 @@ def case_workspace(snapshot, scripted, render_event, pair_tool_calls):
     if not case:
         return
     cid = case['case_id']
+    trace = _case_trace(case)
     st.subheader(f"{case['style']} · {case['category']}")
     st.caption(f"{cid} · {STATUSES.get(case['status'], case['status'])} · Opened {case['opened_as_of']} · Latest assessment {case.get('assessment_as_of', case['opened_as_of'])}")
     if case.get('investigation_mode'):
@@ -347,6 +405,10 @@ def case_workspace(snapshot, scripted, render_event, pair_tool_calls):
                    else 'Investigation: fixed tools and playbook; no model used')
     if case.get('demo_scenario'):
         st.info(case['demo_scenario'])
+    investigator_tools = list(dict.fromkeys(e['tool'] for e in trace.get('events', [])
+                                           if e.get('type') == 'tool_call' and 'Investigator' in e.get('agent', '')))
+    if investigator_tools:
+        st.markdown('**Investigation tool path:** ' + ' → '.join(f'`{name}`' for name in investigator_tools))
     left, right = st.columns([1.5, 1], gap='large')
     with left:
         st.markdown('### Why this was found')
@@ -355,11 +417,21 @@ def case_workspace(snapshot, scripted, render_event, pair_tool_calls):
             _tiles([('Category returns', f"{signal['category_returns']} / {signal['style_returns']}"),
                     ('Category share', f"{signal['category_share']:.1%}"),
                     ('Company baseline', f"{signal['company_baseline_share']:.1%}")])
-            st.caption(f"28-day window ending {signal['as_of']} · {signal['distinct_locations']} locations · This is a category share among returns, not a population return rate.")
+            st.caption(f"{case['style']} · {signal['category']} / all return categories · {window_label(signal['as_of'], signal.get('window_days', 28))} · "
+                       f"All supplied channels / banners · {signal['distinct_locations']} locations. This is a category share among returns, not a population return rate.")
         if case.get('key_evidence'):
             st.markdown(f"#### Investigation evidence · {case.get('assessment_as_of', case['opened_as_of'])}")
-            for fact in case['key_evidence']:
-                st.write('• ' + str(fact))
+            scoped = [row for row in steps(trace, case) if row.get('Observed count')]
+            for row in scoped:
+                st.markdown('**' + row['Observed count'] + '**')
+                st.caption(f"{row['Tool']} · {row['Evidence scope']}")
+            if not scoped:
+                st.caption('No complete structured counts in the saved trace. Read the investigator summary and verify its scope before comparing counts.')
+            st.caption('Detection, investigation windows, samples and transactions use different denominators. Do not add or compare them as the same total.')
+            with st.expander('Investigator evidence summary', expanded=False):
+                st.caption('Recorded investigator narrative; exact tool scopes are shown above and under Agent investigation steps.')
+                for fact in case['key_evidence']:
+                    st.write('• ' + str(fact))
         else:
             st.write(case.get('evidence') or case.get('summary') or 'Evidence is still being gathered.')
         st.markdown('### Current likely explanation')
@@ -383,16 +455,24 @@ def case_workspace(snapshot, scripted, render_event, pair_tool_calls):
                 st.caption(f"Decision needed from {approval['approver']}")
             if not pending:
                 st.caption('No approval proposal is waiting.')
-            st.caption('Review proposals on Approvals & follow-up.')
+            if st.button('Review pending proposals', width='stretch'):
+                st.session_state.selected_case_id = cid
+                st.session_state.next_page = PAGES[2]
+                st.session_state.approval_scope = 'Selected case'
+                st.rerun()
         st.markdown('#### Evidence still needed')
         st.write('Product inspection, batch and supplier records, and verified sales coverage are needed to establish a specific cause or population return rate.')
         st.caption('Notifications and retail actions in this prototype are recorded simulations.')
         if case.get('workflow_error'):
             st.warning('The previous investigation was interrupted. Recorded case history is preserved.')
-            if st.button('Retry investigation', disabled=_recorded() or (not scripted and not os.environ.get('RD_MODEL_ID'))):
+            blocked = _investigation_blocked(True, scripted)
+            if blocked:
+                st.info(blocked)
+            if st.button('Retry investigation', disabled=bool(blocked)):
                 _run_task(lambda emit: workflow.investigate_signal(
                     {'style': case['style'], 'category': case['category']}, case['opened_as_of'], emit,
                     scripted=scripted), 'Resuming investigation', cid)
+    _agent_steps(case, trace)
     st.divider()
     _timeline(case, snapshot)
     if case.get('verification_checks'):
@@ -419,7 +499,78 @@ def case_workspace(snapshot, scripted, render_event, pair_tool_calls):
             st.caption('This is one observed decision difference. Independent review and physical evidence are needed to decide which assessment is correct; it is not an accuracy estimate.')
     _decision_record(case, snapshot)
     _case_value(case)
-    _technical(render_event, pair_tool_calls, case)
+    _technical(render_event, pair_tool_calls, case, trace)
+
+
+def _review_plan(case):
+    from zoneinfo import ZoneInfo
+    from .review_plans import save_plan
+    cid = case['case_id']
+    plan = case.get('review_plan') or {}
+    st.subheader('Future review plan')
+    st.info('Email reminders: not enabled. Saving a plan records a manual review appointment only; '
+            'it does not send an email or automatically run an Agent. The contact email is optional.')
+    zones = ['America/Toronto', 'UTC', 'America/Vancouver', 'Europe/London']
+    timezone = plan.get('timezone', zones[0])
+    if timezone not in zones:
+        zones.append(timezone)
+    now = dt.datetime.now(ZoneInfo(timezone))
+    default = dt.datetime.fromisoformat(plan['local_at']) if plan else now + dt.timedelta(days=7)
+    if plan:
+        due = dt.datetime.fromisoformat(plan['review_at_utc']) <= now
+        st.success(f"{'Due for manual review' if due else 'Plan saved'} · {plan['local_at']} · {timezone}")
+        st.caption('No email has been queued or sent. Review the case manually at the planned time.')
+    with st.form('review_plan_' + cid):
+        date_column, time_column = st.columns(2)
+        date = date_column.date_input('Future review date', default.date(), key='future_date_' + cid)
+        time = time_column.time_input('Review time', default.time().replace(tzinfo=None, second=0, microsecond=0), key='future_time_' + cid)
+        timezone = st.selectbox('Time zone', zones, index=zones.index(timezone), key='future_zone_' + cid)
+        email = st.text_input('Review contact email (optional)', value=plan.get('contact_email', ''),
+                              placeholder='Email reminders are not enabled', key='review_email_' + cid)
+        saved = st.form_submit_button('Save review plan', type='primary', disabled=_recorded() or case['status'] == 'CLOSED')
+    if saved:
+        try:
+            with workflow.exclusive_run():
+                save_plan(cid, date, time, timezone, email)
+        except ValueError as exc:
+            st.error(str(exc))
+        else:
+            st.session_state.notice = 'Review plan saved. Email reminders and automatic Agent runs are not enabled.'
+            st.rerun()
+    if case['status'] == 'CLOSED':
+        st.caption('This case is closed. A new review plan is unavailable.')
+    st.caption('This appointment uses the real calendar. It does not change the historical evidence cutoff '
+               'or establish that newer return data is available.')
+
+
+def _historical_followup(case, pending, scripted):
+    cid = case['case_id']
+    planned = case.get('verification') or {}
+    with st.expander('Historical follow-up replay', expanded=False):
+        st.caption('Replay a historical observation against the supplied snapshot. This is separate from the future review plan and sends no email.')
+        if not planned.get('due_on'):
+            if case['status'] != 'CLOSED' and st.button('Schedule historical verification', disabled=_recorded()):
+                from .verification import schedule
+                with workflow.exclusive_run():
+                    schedule(cid, case['opened_as_of'])
+                st.rerun()
+            return
+        chosen = st.date_input('Observation date', dt.date.fromisoformat(planned['due_on']), key='observation_' + cid)
+        st.caption(f"Historical verification due {planned['due_on']}. A persistent signal reopens the case for review. Fewer returns alone do not establish that an action caused an improvement.")
+        blocked = _investigation_blocked(True, scripted)
+        if not blocked and any(a['case_id'] == cid for a in pending):
+            blocked = 'Resolve this case’s pending proposals before running historical follow-up.'
+        if not blocked and case['status'] == 'CLOSED':
+            blocked = 'This case is already closed.'
+        if blocked:
+            st.caption(blocked)
+        retry = bool(case.get('review_error_as_of'))
+        if st.button('Retry follow-up' if retry else 'Check outcome', disabled=bool(blocked), type='primary'):
+            _run_task(lambda emit: workflow.review_case(cid, chosen.isoformat(), emit,
+                      scripted=scripted, retry_review=retry), 'Checking follow-up observations', cid)
+        if case.get('verification_checks'):
+            latest = case['verification_checks'][-1]
+            st.write(f"Latest observation: **{latest['outcome'].replace('_', ' ').title()}** on {latest['as_of']}")
 
 
 def approvals_and_followup(snapshot, scripted, render_event, pair_tool_calls):
@@ -427,18 +578,26 @@ def approvals_and_followup(snapshot, scripted, render_event, pair_tool_calls):
              'Review the proposed action, record a human decision, then check what the next observations show.')
     pending = [a for a in snapshot['approvals'] if a['status'] == 'PENDING']
     _tiles([('Awaiting decisions', len(pending)),
-            ('Follow-ups scheduled', sum(bool(c.get('verification', {}).get('due_on')) and c['status'] != 'CLOSED' for c in snapshot['cases'].values())),
+            ('Manual review plans', sum(bool(c.get('review_plan')) and c['status'] != 'CLOSED' for c in snapshot['cases'].values())),
             ('Cases closed', sum(c['status'] == 'CLOSED' for c in snapshot['cases'].values()))])
+    st.caption('Workspace totals. Review plans do not enable automatic execution or email delivery.')
+    case = _case_picker(snapshot, 'Case to review')
+    if not case:
+        return
+    cid = case['case_id']
     st.subheader('Approval queue')
+    scope = st.radio('Proposal scope', ['Selected case', 'All cases'], horizontal=True, key='approval_scope')
+    visible_pending = [a for a in pending if a['case_id'] == cid] if scope == 'Selected case' else pending
+    st.caption(f"{len(visible_pending)} pending proposals · " + (f'{cid} · {case["style"]}' if scope == 'Selected case' else 'all cases in this workspace'))
     st.caption('Demo decisions are recorded under the reviewer name entered here; retail actions remain simulated.')
     reviewer = st.text_input('Reviewer name', placeholder='Enter your name before recording a decision', disabled=_recorded())
-    if not pending:
+    if not visible_pending:
         st.info('No pending approval requests.')
-    for approval in pending:
-        case = snapshot['cases'].get(approval['case_id'], {})
+    for approval in visible_pending:
+        proposal_case = snapshot['cases'].get(approval['case_id'], {})
         with st.container(border=True):
             st.markdown(f"#### {approval['action']}")
-            st.caption(f"{case.get('style', '')} · {approval['case_id']} · {approval['approver']}")
+            st.caption(f"{proposal_case.get('style', '')} · {approval['case_id']} · {approval['approver']}")
             st.write(_detail(approval.get('detail')))
             approve, reject = st.columns(2)
             for column, label, decision in [(approve, 'Approve proposal', True), (reject, 'Reject proposal', False)]:
@@ -449,32 +608,9 @@ def approvals_and_followup(snapshot, scripted, render_event, pair_tool_calls):
                     st.rerun()
     st.divider()
     st.subheader('Follow-up desk')
-    case = _case_picker(snapshot, 'Case to review')
-    if not case:
-        return
-    cid = case['case_id']
-    planned = case.get('verification') or {}
     _timeline(case, snapshot)
-    if not planned.get('due_on'):
-        if case['status'] != 'CLOSED' and st.button('Schedule follow-up', disabled=_recorded()):
-            from .verification import schedule
-            with workflow.exclusive_run():
-                schedule(cid, case['opened_as_of'])
-            st.rerun()
-    else:
-        chosen = st.date_input('Observation date', dt.date.fromisoformat(planned['due_on']))
-        st.caption(f"Due {planned['due_on']}. A persistent signal reopens the case for review. Fewer returns alone do not establish that an action caused an improvement.")
-        remaining = any(a['case_id'] == cid for a in pending)
-        if remaining:
-            st.caption('Resolve this case’s pending proposals before running follow-up.')
-        disabled = _recorded() or remaining or case['status'] == 'CLOSED' or (not scripted and not os.environ.get('RD_MODEL_ID'))
-        retry = bool(case.get('review_error_as_of'))
-        if st.button('Retry follow-up' if retry else 'Check outcome', disabled=disabled, type='primary'):
-            _run_task(lambda emit: workflow.review_case(cid, chosen.isoformat(), emit,
-                      scripted=scripted, retry_review=retry), 'Checking follow-up observations', cid)
-        if case.get('verification_checks'):
-            latest = case['verification_checks'][-1]
-            st.write(f"Latest observation: **{latest['outcome'].replace('_', ' ').title()}** on {latest['as_of']}")
+    _review_plan(case)
+    _historical_followup(case, pending, scripted)
     _technical(render_event, pair_tool_calls, case)
 
 
@@ -511,6 +647,11 @@ def render_workspace(render_event, pair_tool_calls, supporting_analysis):
                             key='investigation_mode')
         scripted = mode == 'Scripted baseline (no model)'
         st.caption('Screening is statistical in both modes. The mode only changes investigations and follow-up.')
+        blocked = _investigation_blocked(available, scripted)
+        if blocked:
+            st.warning(blocked)
+        elif not scripted:
+            st.caption('Bedrock model configured. Model permissions and service availability are checked when an investigation runs.')
         st.divider()
         st.caption('Synthetic dataset' if is_synthetic() else 'Authorized ALDO historical data')
         st.caption('AWS data & case storage' if BACKEND == 'athena' and store.STORE_BACKEND == 'dynamodb' else 'Local data or case storage')

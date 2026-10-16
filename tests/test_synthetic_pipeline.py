@@ -170,7 +170,7 @@ assert not app.exception, [e.message for e in app.exception]
 if os.environ["RD_TEST_MISSING"] == "1":
     assert next(b for b in app.button if b.label == "Process day's returns").disabled
 else:
-    assert app.radio[0].options == ['Returns monitor', 'Case workspace', 'Approvals & follow-up']
+    assert next(r for r in app.radio if r.label == 'Workspace').options == ['Returns monitor', 'Case workspace', 'Approvals & follow-up']
     import datetime as dt
     next(d for d in app.date_input if d.label == 'Replay date').set_value(dt.date(2026, 1, 30)).run()
     next(b for b in app.button if b.label == "Process day's returns").click().run(timeout=30)
@@ -179,30 +179,52 @@ else:
     signal = next(s for s in app.selectbox if s.label == 'Select signal')
     index = next(i for i,label in enumerate(signal.options) if 'RiverLoafer' in label and 'Quality' in label)
     signal.select_index(index).run()
+    assert any('Flagged returns' in item.value for item in app.markdown)
+    next(s for s in app.selectbox if s.label == 'Investigation mode').set_value('Live agents (Bedrock)').run()
+    assert next(b for b in app.button if b.label == 'Start investigation').disabled
+    assert any('RD_MODEL_ID is empty' in item.value for item in app.info)
+    next(s for s in app.selectbox if s.label == 'Investigation mode').set_value('Scripted baseline (no model)').run()
     next(b for b in app.button if b.label == 'Start investigation').click().run(timeout=30)
     assert not app.exception, [e.message for e in app.exception]
-    app.radio[0].set_value('Returns monitor').run()
+    next(r for r in app.radio if r.label == 'Workspace').set_value('Returns monitor').run()
     next(s for s in app.selectbox if s.label == 'Show returns').set_value('Linked to case').run()
     assert any('Case' in frame.value and frame.value['Case'].str.startswith('CASE-').any()
                for frame in app.dataframe), 'Newly investigated returns must appear without reprocessing'
-    app.radio[0].set_value('Case workspace').run()
+    next(r for r in app.radio if r.label == 'Workspace').set_value('Case workspace').run()
     assert not app.exception, [e.message for e in app.exception]
     assert any('Current likely explanation' in item.value for item in app.markdown)
-    app.radio[0].set_value('Approvals & follow-up').run()
+    assert any('Tool' in frame.value.columns for frame in app.dataframe), 'Tool path should be visible without a checkbox'
+    from rd import store
+    cid = app.session_state['selected_case_id']
+    other = store.open_case('Other fixture', 'Quality', '2026-01-30', 'fixture', 'fixture')
+    store.request_approval(other['case_id'], 4, 'Unrelated proposal', {}, 'Fixture owner')
+    next(b for b in app.button if b.label == 'Review pending proposals').click().run()
     assert not app.exception, [e.message for e in app.exception]
+    assert next(r for r in app.radio if r.label == 'Workspace').value == 'Approvals & follow-up'
+    assert app.session_state['selected_case_id'] == cid
+    assert not any('Unrelated proposal' in item.value for item in app.markdown)
+    historical_due = store.get_case(cid).get('verification')
+    next(b for b in app.button if b.label == 'Save review plan').click().run()
+    assert not app.exception, [e.message for e in app.exception]
+    plan = store.get_case(cid)['review_plan']
+    assert plan['email_delivery'] == 'NOT_ENABLED' and not plan['automatic_run']
+    assert store.get_case(cid).get('verification') == historical_due
+    assert any('No email has been queued or sent' in item.value for item in app.caption)
     approve = next(b for b in app.button if b.label == 'Approve proposal')
     assert approve.disabled
     next(t for t in app.text_input if t.label == 'Reviewer name').set_value('Fixture reviewer').run()
     next(b for b in app.button if b.label == 'Approve proposal').click().run()
     assert not app.exception, [e.message for e in app.exception]
-    from rd import store
     assert any(a['status'] == 'APPROVED' for a in store.snapshot()['approvals'])
+    next(s for s in app.selectbox if s.label == 'Case to review').set_value(other['case_id']).run()
+    assert app.session_state['selected_case_id'] == other['case_id'], 'Case picker must allow changing cases'
+    assert any('Unrelated proposal' in item.value for item in app.markdown)
     os.environ['RD_RECORDED_REPLAY'] = '1'
     app.run()
     assert not app.exception, [e.message for e in app.exception]
     assert next(s for s in app.selectbox if s.label == 'Investigation mode').disabled
-    assert all(b.disabled for b in app.button if b.label in ('Approve proposal', 'Reject proposal', 'Check outcome'))
-    app.radio[0].set_value('Returns monitor').run()
+    assert all(b.disabled for b in app.button if b.label in ('Approve proposal', 'Reject proposal', 'Check outcome', 'Save review plan'))
+    next(r for r in app.radio if r.label == 'Workspace').set_value('Returns monitor').run()
     assert next(b for b in app.button if b.label == "Process day's returns").disabled
     assert all(b.disabled for b in app.button if b.label == 'Start investigation')
     del os.environ['RD_RECORDED_REPLAY']
