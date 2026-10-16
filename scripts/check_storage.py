@@ -23,17 +23,22 @@ def main():
     account = session.client("sts").get_caller_identity()["Account"]
     session.client("s3").head_bucket(Bucket=bucket, ExpectedBucketOwner=account)
     glue = session.client("glue")
-    for name in data.TABLES:
+    for name in data.TABLES + (data.EXTRA_TABLES if data.CURATED else ()):
         glue.get_table(CatalogId=account, DatabaseName=data.ATHENA_DB, Name=name)
     dynamodb = session.client("dynamodb")
-    for name in store._TABLES.values():
+    names = [store.STATE_TABLE] if store.STATE_TABLE else list(store._TABLES.values())
+    for name in names:
         table = dynamodb.describe_table(TableName=name)["Table"]
         if table["TableStatus"] != "ACTIVE":
             raise RuntimeError(f"DynamoDB table {name} is {table['TableStatus']}")
+        if store.STATE_TABLE and table['KeySchema'] != [
+                {'AttributeName': 'PK', 'KeyType': 'HASH'},
+                {'AttributeName': 'SK', 'KeyType': 'RANGE'}]:
+            raise RuntimeError('RD_STATE_TABLE must use PK (partition key) and SK (sort key)')
     count = data.one("select count(*) as n from returns")["n"]
     print(f"Connected: account {account}, region {data.REGION}, "
           f"S3/Glue/Athena {data.ATHENA_DB} ({count} returns), "
-          f"three DynamoDB tables; namespace {store._NAMESPACE}")
+          f"DynamoDB {', '.join(names)}; namespace {store._NAMESPACE}")
 
 
 if __name__ == "__main__":

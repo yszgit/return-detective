@@ -363,7 +363,8 @@ def trace_path(key):
 
 
 def run_live(sc, box, scripted=False):
-    store.reset()
+    if store.STORE_BACKEND == 'json':
+        store.reset()
     q, events, err = queue.Queue(), [], []
 
     def worker():
@@ -412,7 +413,10 @@ def run_live(sc, box, scripted=False):
 def replay(sc, box, speed=0.35):
     with open(trace_path(sc["key"]), encoding="utf-8") as f:
         saved = json.load(f)
-    store.restore(saved["store"])
+    if store.STORE_BACKEND == 'json':
+        store.restore(saved["store"])
+    else:
+        box.caption('Saved trace playback; current DynamoDB cases are preserved.')
     evs = pair_tool_calls(saved["events"])
     for e in evs:
         render_event(e, box)

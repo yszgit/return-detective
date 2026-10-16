@@ -1,6 +1,7 @@
 """Case files, action log and approval queue for the single-process demo.
 
-RD_STORE_BACKEND=dynamodb persists the same three record types in separate tables.
+RD_STORE_BACKEND=dynamodb persists records in separate tables, or in a PK/SK
+table when RD_STATE_TABLE is set. Each namespace is an isolated demo run.
 The read/modify/write API is still a demo API, not a concurrent transaction system.
 """
 import json, os, threading, uuid, datetime
@@ -18,6 +19,8 @@ if STORE_BACKEND == "dynamodb" and not _NAMESPACE:
 _TABLES = {name: os.environ.get(f"RD_{name.upper()}_TABLE", f"rd_{name}")
            for name in ("cases", "actions", "approvals")}
 _KEYS = {"cases": "case_id", "actions": "action_id", "approvals": "approval_id"}
+STATE_TABLE = os.environ.get("RD_STATE_TABLE", "").strip()
+_PREFIXES = {"cases": "CASE#", "actions": "ACTION#", "approvals": "APPROVAL#"}
 _DDB = None
 
 
@@ -42,13 +45,15 @@ def _plain(value):
 
 def _records(name):
     from boto3.dynamodb.conditions import Key
-    table = _ddb().Table(_TABLES[name])
-    kwargs = {"KeyConditionExpression": Key("namespace").eq(_NAMESPACE),
+    table = _ddb().Table(STATE_TABLE or _TABLES[name])
+    condition = (Key("PK").eq("RUN#" + _NAMESPACE) & Key("SK").begins_with(_PREFIXES[name])
+                 if STATE_TABLE else Key("namespace").eq(_NAMESPACE))
+    kwargs = {"KeyConditionExpression": condition,
               "ConsistentRead": True}
     items = []
     while True:
         page = table.query(**kwargs)
-        items.extend(_plain({k: v for k, v in item.items() if k != "namespace"})
+        items.extend(_plain({k: v for k, v in item.items() if k not in ("namespace", "PK", "SK")})
                      for item in page.get("Items", []))
         if "LastEvaluatedKey" not in page:
             return items
@@ -69,7 +74,7 @@ def _load():
 def _save(db):
     if STORE_BACKEND == "dynamodb":
         for name in _TABLES:
-            table = _ddb().Table(_TABLES[name])
+            table = _ddb().Table(STATE_TABLE or _TABLES[name])
             key = _KEYS[name]
             records = list(db["cases"].values()) if name == "cases" else db[name]
             current = {item[key] for item in _records(name)}
@@ -78,9 +83,13 @@ def _save(db):
                 for item in records:
                     payload = json.loads(json.dumps(item, default=str, allow_nan=False),
                                          parse_float=Decimal)
-                    batch.put_item(Item={"namespace": _NAMESPACE, **payload})
+                    identity = ({"PK": "RUN#" + _NAMESPACE, "SK": _PREFIXES[name] + item[key]}
+                                if STATE_TABLE else {"namespace": _NAMESPACE})
+                    batch.put_item(Item={**payload, **identity})
                 for record_id in current - wanted:
-                    batch.delete_item(Key={"namespace": _NAMESPACE, key: record_id})
+                    identity = ({"PK": "RUN#" + _NAMESPACE, "SK": _PREFIXES[name] + record_id}
+                                if STATE_TABLE else {"namespace": _NAMESPACE, key: record_id})
+                    batch.delete_item(Key=identity)
         return
     os.makedirs(RUNTIME_DIR, exist_ok=True)
     tmp = _PATH + ".tmp"
