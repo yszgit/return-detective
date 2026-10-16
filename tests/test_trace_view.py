@@ -6,6 +6,18 @@ from rd.trace_view import steps
 
 
 class TraceViewTests(unittest.TestCase):
+    def test_actual_approval_and_refusal_tool_outputs_are_labeled_correctly(self):
+        events = []
+        for name, output in [('request_fit_guidance_update', {'approval_requested': 'APR-1', 'approval_status': 'PENDING'}),
+                             ('request_stock_hold', {'refused': 'Requires Quality and High confidence'}),
+                             ('request_fit_guidance_update', {'approval_requested': 'APR-2', 'approval_status': 'REJECTED'})]:
+            events += [{'type': 'tool_call', 'agent': 'Response', 'tool': name, 'input': {}},
+                       {'type': 'tool_result', 'agent': 'Response', 'tool': name, 'output': json.dumps(output)}]
+        rows = steps({'events': events}, {'case_id': 'CASE-FIXTURE'})
+        self.assertEqual(rows[0]['Outcome'], 'Human approval required')
+        self.assertTrue(rows[1]['Outcome'].startswith('Not authorized'))
+        self.assertEqual(rows[2]['Outcome'], 'Existing proposal · rejected')
+
     def test_repeated_tools_keep_their_own_window_category_and_result(self):
         events = []
         for days, category, count in [(28, 'Quality', 142), (60, 'No merchandise', 194)]:

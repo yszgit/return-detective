@@ -171,6 +171,8 @@ if os.environ["RD_TEST_MISSING"] == "1":
     assert next(b for b in app.button if b.label == "Process day's returns").disabled
 else:
     assert next(r for r in app.radio if r.label == 'Workspace').options == ['Returns monitor', 'Case workspace', 'Approvals & follow-up']
+    assert any(b.label == 'Delete / restore cases' for b in app.button), 'Deletion entry must be directly visible'
+    assert not any(b.label == 'Back up and delete' for b in app.button), 'Opening data controls must be separate from deletion'
     import datetime as dt
     next(d for d in app.date_input if d.label == 'Replay date').set_value(dt.date(2026, 1, 30)).run()
     next(b for b in app.button if b.label == "Process day's returns").click().run(timeout=30)
@@ -223,6 +225,8 @@ else:
     app.run()
     assert not app.exception, [e.message for e in app.exception]
     assert next(s for s in app.selectbox if s.label == 'Investigation mode').disabled
+    next(b for b in app.button if b.label == 'Delete / restore cases').click().run()
+    assert next(c for c in app.checkbox if c.label == 'Clear all records listed above').disabled
     assert all(b.disabled for b in app.button if b.label in ('Approve proposal', 'Reject proposal', 'Check outcome', 'Save review plan', 'Back up and delete', 'Restore latest backup'))
     next(r for r in app.radio if r.label == 'Workspace').set_value('Returns monitor').run()
     assert next(b for b in app.button if b.label == "Process day's returns").disabled

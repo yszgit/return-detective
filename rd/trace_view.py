@@ -19,6 +19,7 @@ PURPOSES = {
     'record_findings': 'Save the assessment',
     'notify_owner_team': 'Record owner notification (simulation)',
     'waive_restocking_fees': 'Apply the fee authority gate (simulation)',
+    'request_fit_guidance_update': 'Request Merchandising approval for fit guidance',
     'request_stock_hold': 'Request human approval for a stock hold',
     'draft_supplier_claim': 'Draft a claim for human approval',
     'request_proactive_outreach': 'Request human approval for outreach',
@@ -80,7 +81,11 @@ def _outcome(event):
     if isinstance(result, dict):
         if result.get('error'):
             return 'Blocked · ' + str(result['error'])[:180]
-        if result.get('approval_required') or result.get('status') == 'PENDING':
+        if result.get('refused'):
+            return 'Not authorized · ' + str(result['refused'])[:180]
+        if result.get('approval_status') in ('APPROVED', 'REJECTED'):
+            return 'Existing proposal · ' + result['approval_status'].lower()
+        if result.get('approval_required') or result.get('status') == 'PENDING' or result.get('approval_status') == 'PENDING':
             return 'Human approval required'
         if result.get('population_return_rate_available') is False:
             return 'Population return rate unavailable'

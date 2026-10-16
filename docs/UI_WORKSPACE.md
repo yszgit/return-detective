@@ -113,7 +113,8 @@ integration is introduced by this UI change.
 
 ## Clear a demo workspace
 
-The left sidebar has **Delete saved cases**. It shows the current namespace and
+The left sidebar has a visible **Delete / restore cases** button directly below
+the page navigation. Click it to open **Delete saved cases**, showing the current namespace and
 counts of cases, approvals and actions. Select **Clear all records listed above**,
 then **Back up and delete**. The app saves and verifies a local backup before
 clearing only the configured case store namespace. It also clears that workspace's
@@ -126,6 +127,13 @@ backup. **Restore latest backup** restores the case store and day reports only
 while the workspace is empty; it refuses another namespace or configuration.
 Deletion and restoration are disabled in recorded read-only mode. These controls
 are intended for the single-process demo, not concurrent production administration.
+
+An empty approval queue explains whether confidence is below the action gate,
+proposals have already been decided, or the investigation is incomplete. If a fit
+case at Medium/High confidence or a Quality case at High confidence has no saved
+proposal, the UI asks the reviewer to inspect the Response Agent result. It does
+not fabricate requests to fill an empty queue. **Actions and decisions** remains
+available on the approvals page for completed proposals.
 
 ## Checks
 

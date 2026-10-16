@@ -15,6 +15,7 @@ from . import store, workflow
 from .config import BACKEND, RUNTIME_DIR, data_available, is_synthetic
 from .scenarios import SCENARIOS
 from .trace_view import cutoff, steps, window_label
+from .approval_view import approval_notice
 
 PAGES = ['Returns monitor', 'Case workspace', 'Approvals & follow-up']
 STATUSES = {'OPEN': 'Open', 'AWAITING_APPROVAL': 'Awaiting approval', 'ACTIONED': 'Action recorded',
@@ -480,7 +481,8 @@ def case_workspace(snapshot, scripted, render_event, pair_tool_calls):
                 st.markdown(f"**{approval['action']}**")
                 st.caption(f"Decision needed from {approval['approver']}")
             if not pending:
-                st.caption('No approval proposal is waiting.')
+                tone, explanation = approval_notice(case, snapshot['approvals'])
+                getattr(st, tone)(explanation)
             if st.button('Review pending proposals', width='stretch'):
                 st.session_state.selected_case_id = cid
                 st.session_state.next_page = PAGES[2]
@@ -618,7 +620,10 @@ def approvals_and_followup(snapshot, scripted, render_event, pair_tool_calls):
     st.caption('Demo decisions are recorded under the reviewer name entered here; retail actions remain simulated.')
     reviewer = st.text_input('Reviewer name', placeholder='Enter your name before recording a decision', disabled=_recorded())
     if not visible_pending:
-        st.info('No pending approval requests.')
+        if scope == 'All cases':
+            st.info('No pending approval requests in this workspace.')
+        tone, explanation = approval_notice(case, snapshot['approvals'])
+        getattr(st, tone)(explanation)
     for approval in visible_pending:
         proposal_case = snapshot['cases'].get(approval['case_id'], {})
         with st.container(border=True):
@@ -632,6 +637,7 @@ def approvals_and_followup(snapshot, scripted, render_event, pair_tool_calls):
                     store.decide_approval(approval['approval_id'], decision, reviewer.strip())
                     st.session_state.notice = 'Decision recorded. The case timeline has been updated.'
                     st.rerun()
+    _decision_record(case, snapshot)
     st.divider()
     st.subheader('Follow-up desk')
     _timeline(case, snapshot)
@@ -651,7 +657,13 @@ def _reset_workspace_view(message):
 
 def _workspace_data_controls(snapshot, available):
     from . import workspace_state
-    with st.expander('Delete saved cases', expanded=False):
+    if st.button('Delete / restore cases', key='workspace_data_entry', type='primary', width='stretch',
+                 help='Open backup, deletion and restore controls for the current workspace.'):
+        st.session_state.show_workspace_data = not st.session_state.get('show_workspace_data', False)
+    if not st.session_state.get('show_workspace_data', False):
+        return
+    with st.container(border=True):
+        st.markdown('**Delete saved cases**')
         totals = workspace_state.counts(snapshot)
         st.caption('Current workspace: ' + (store._NAMESPACE or 'local'))
         st.write(f"{totals['cases']} cases · {totals['approvals']} approvals · {totals['actions']} action records")
