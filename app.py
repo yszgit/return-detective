@@ -35,7 +35,9 @@ AGENT_STYLE = {"Triage Agent": ("I", "Triage"), "Investigator Agent": ("II", "In
 # Palette (strict monochrome)
 BLACK, CHARCOAL, GREY, DASH, HAIR, FILL, WHITE = "#000000", "#333333", "#767676", "#BDBDBD", "#E6E6E6", "#F5F5F5", "#FFFFFF"
 
-st.set_page_config(page_title="Return Detective", layout="wide")
+# Browser-tab icon: white "ALDO" on a black tile (inline SVG data URI, no extra file).
+ALDO_ICON = ("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA2NCc+PHJlY3Qgd2lkdGg9JzY0JyBoZWlnaHQ9JzY0JyByeD0nMTAnIGZpbGw9J2JsYWNrJy8+PHRleHQgeD0nMzInIHk9JzQwJyBmb250LWZhbWlseT0nQXJpYWwsSGVsdmV0aWNhLHNhbnMtc2VyaWYnIGZvbnQtd2VpZ2h0PSc3MDAnIGZvbnQtc2l6ZT0nMTgnIHRleHQtYW5jaG9yPSdtaWRkbGUnIGZpbGw9J3doaXRlJz5BTERPPC90ZXh0Pjwvc3ZnPg==")
+st.set_page_config(page_title="Return Detective", page_icon=ALDO_ICON, layout="wide")
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&display=swap');
@@ -167,10 +169,11 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {color: var(--g
 [data-testid="stSlider"] [role="slider"] {background-color: var(--ink) !important; box-shadow: none !important;}
 
 /* ---------- expanders, containers, tables ---------- */
-[data-testid="stExpander"] details {border: 1px solid var(--hair) !important; border-radius: 0 !important; background: var(--white);}
-[data-testid="stExpander"] summary {padding: 0.6rem 0.9rem; border-radius: 0 !important;}
-[data-testid="stExpander"] summary:hover {background: var(--fill);}
-[data-testid="stExpander"] summary p {font-size: 0.82rem; color: var(--char);}
+[data-testid="stExpander"] {margin-top: -0.5rem;}
+[data-testid="stExpander"] details {border: none !important; border-left: 1px solid var(--hair) !important; border-radius: 0 !important; background: transparent;}
+[data-testid="stExpander"] summary {padding: 0.2rem 0.8rem; border-radius: 0 !important;}
+[data-testid="stExpander"] summary:hover {background: transparent;}
+[data-testid="stExpander"] summary p {font-size: 0.78rem; color: var(--grey);}
 [data-testid="stExpander"] summary:hover p {color: var(--ink);}
 [class*="st-key-rdcard"] {background: var(--white); border: 1px solid var(--hair) !important; border-radius: 0 !important;
         padding: 1.3rem 1.4rem !important; box-shadow: none !important;}
@@ -183,23 +186,24 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {color: var(--g
 .stMarkdown tr {background: transparent !important;}
 
 /* ---------- trace ---------- */
-.rd-stage {display: flex; align-items: baseline; gap: 0.9rem; margin: 2.2rem 0 1rem 0; padding-top: 0.9rem;
-           border-top: 1px solid var(--ink);}
-.rd-stage .m {width: 1.4rem; border-top: 2px solid var(--ink); transform: translateY(-0.25rem);}
+.rd-stage {display: flex; align-items: baseline; gap: 0.9rem; margin: 0.9rem 0 0.4rem 0; padding-top: 0.4rem;
+           border-top: 1px solid var(--hair);}
+.rd-stage .m {display: none;}
 .rd-stage .t {font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink); font-weight: 500;}
-.rd-agent {display: flex; align-items: baseline; gap: 0.6rem; margin: 1.3rem 0 0.2rem 0;}
-.rd-agent .n {font-family: 'Jost', sans-serif; font-size: 1.25rem; font-weight: 300; color: var(--ink); min-width: 1.6rem;}
+.rd-agent {display: flex; align-items: baseline; gap: 0.6rem; margin: 0.8rem 0 0.1rem 0;}
+.rd-agent .n {font-family: 'Jost', sans-serif; font-size: 1rem; font-weight: 300; color: var(--ink); min-width: 1.6rem;}
 .rd-agent .t {font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--char); font-weight: 500;}
+[data-testid="stElementContainer"]:has(.rd-agent) + [data-testid="stElementContainer"] .stMarkdown p {margin: 0 0 0.5rem 0;}
 
 /* ---------- notices (replace st.error / success / warning / info) ---------- */
-.rd-note {background: var(--white); border: 1px solid var(--hair); border-left: 3px solid var(--dash); padding: 1.15rem 1.4rem;
-          margin: 1rem 0;}
+.rd-note {background: var(--white); border: none; border-left: 2px solid var(--dash); padding: 0.6rem 1rem;
+          margin: 0.6rem 0;}
 .rd-note.neutral {background: var(--fill); border: none;}
-.rd-note.investigate {border-left: 3px solid var(--ink);}
-.rd-note.isolated {border-left: 3px solid var(--dash);}
+.rd-note.investigate {border-left: 2px solid var(--ink);}
+.rd-note.isolated {border-left: 2px solid var(--dash);}
 .rd-note .k {font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--char); font-weight: 500;}
-.rd-note .h {font-family: 'Jost', sans-serif; font-size: 1.5rem; font-weight: 300; color: var(--ink);
-             line-height: 1.25; margin: 0.4rem 0 0.5rem 0;}
+.rd-note .h {font-family: 'Jost', sans-serif; font-size: 1.2rem; font-weight: 300; color: var(--ink);
+             line-height: 1.25; margin: 0.25rem 0 0.35rem 0;}
 .rd-note .h .v {display: inline-block; font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 500;
                 line-height: 1; padding: 0.4rem 0.75rem; border: 1px solid var(--ink); color: var(--ink);}
 .rd-note.investigate .h .v {background: var(--ink); color: var(--white); border-color: var(--ink);}
@@ -210,7 +214,7 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {color: var(--g
 .rd-note.plain {background: transparent; border: none; border-left: 3px solid var(--hair); padding: 0.4rem 0 0.4rem 1.2rem;}
 
 /* ---------- case file ---------- */
-.rd-case {background: var(--white); border: 1px solid var(--hair); padding: 1.7rem 1.8rem; margin: 0 0 1.6rem 0;}
+.rd-case {background: var(--white); border: 1px solid var(--hair); padding: 1.1rem 1.3rem; margin: 0 0 1rem 0;}
 .rd-case h4 {font-family: 'Jost', sans-serif !important; font-size: 1.6rem; font-weight: 400 !important;
              line-height: 1.2; margin: 0.5rem 0 0.9rem 0; padding: 0;}
 .rd-case h4 .id {color: var(--char); font-weight: 300;}
@@ -219,7 +223,7 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {color: var(--g
 .rd-chip.high {background: var(--ink); border-color: var(--ink); color: var(--white);}
 .rd-chip.medium {border-color: var(--ink); color: var(--ink);}
 .rd-chip.low {border-color: var(--dash); color: var(--char);}
-.rd-field {margin-top: 1.1rem; padding-top: 0.9rem; border-top: 1px solid var(--hair);}
+.rd-field {margin-top: 0.7rem; padding-top: 0.6rem; border-top: 1px solid var(--hair);}
 .rd-field .k {font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--char); font-weight: 500;}
 .rd-field .v {font-size: 0.94rem; line-height: 1.65; color: var(--ink); margin-top: 0.25rem;}
 .rd-field .v.muted {color: var(--char);}
@@ -236,15 +240,15 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {color: var(--g
 .rd-decided.rejected {color: var(--char);}
 
 /* ---------- metrics ---------- */
-.rd-metric {border-top: 1px solid var(--ink); padding-top: 1.1rem; margin: 0 0 2rem 0;}
-.rd-metric .big {font-family: 'Jost', sans-serif; font-weight: 300; font-size: 3.2rem; line-height: 1; color: var(--ink);
+.rd-metric {border-top: 1px solid var(--hair); padding-top: 0.8rem; margin: 0 0 1.3rem 0;}
+.rd-metric .big {font-family: 'Jost', sans-serif; font-weight: 300; font-size: 2.6rem; line-height: 1; color: var(--ink);
                  letter-spacing: -0.01em;}
 .rd-metric .cap {font-size: 0.88rem; color: var(--ink); margin-top: 0.75rem; line-height: 1.5;}
 .rd-metric .sub {font-size: 0.78rem; color: var(--grey); margin-top: 0.3rem; line-height: 1.5;}
 .rd-metric .plus {font-family: 'Jost', sans-serif; font-weight: 300; font-size: 1.8rem; color: var(--ink);
                   margin-top: 1.1rem; padding-top: 0.9rem; border-top: 1px solid var(--hair);}
 .rd-h {font-family: 'Jost', sans-serif; font-weight: 400; font-size: 1.6rem; line-height: 1.25; color: var(--ink);
-       margin: 2.6rem 0 0.3rem 0;}
+       margin: 1.8rem 0 0.3rem 0;}
 .rd-h-sub {font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--char); margin-bottom: 1.2rem;}
 </style>""", unsafe_allow_html=True)
 
