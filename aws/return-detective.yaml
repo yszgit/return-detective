@@ -1,0 +1,127 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Private demo storage for Return Detective. No data is uploaded by this stack.
+Parameters:
+  DataBucketName:
+    Type: String
+    Description: Globally unique S3 bucket name for this team's data and Athena results.
+    AllowedPattern: '^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
+  GlueDatabaseName:
+    Type: String
+    Default: aldo_returns
+    AllowedPattern: '^[a-z][a-z0-9_]*$'
+Resources:
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref DataBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+  DataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt DataBucket.Arn
+              - !Sub '${DataBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Ref GlueDatabaseName
+  AthenaWorkGroup:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-queries'
+      State: ENABLED
+      WorkGroupConfiguration:
+        EnforceWorkGroupConfiguration: true
+        PublishCloudWatchMetricsEnabled: false
+        BytesScannedCutoffPerQuery: 1073741824
+        ResultConfiguration:
+          OutputLocation: !Sub 's3://${DataBucketName}/athena-results/'
+          EncryptionConfiguration:
+            EncryptionOption: SSE_S3
+  CasesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-cases'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: namespace
+          AttributeType: S
+        - AttributeName: case_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: namespace
+          KeyType: HASH
+        - AttributeName: case_id
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+  ActionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-actions'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: namespace
+          AttributeType: S
+        - AttributeName: action_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: namespace
+          KeyType: HASH
+        - AttributeName: action_id
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+  ApprovalsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-approvals'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: namespace
+          AttributeType: S
+        - AttributeName: approval_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: namespace
+          KeyType: HASH
+        - AttributeName: approval_id
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+Outputs:
+  DataBucket:
+    Value: !Ref DataBucket
+  GlueDatabase:
+    Value: !Ref GlueDatabaseName
+  AthenaWorkGroup:
+    Value: !Ref AthenaWorkGroup
+  CasesTable:
+    Value: !Ref CasesTable
+  ActionsTable:
+    Value: !Ref ActionsTable
+  ApprovalsTable:
+    Value: !Ref ApprovalsTable

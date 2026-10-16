@@ -1,0 +1,11 @@
+{
+  "description": "Seeded synthetic acceptance cases, not real-world root-cause labels. Do not tune prompts on these and claim held-out accuracy.",
+  "cases": [
+    {"name": "isolated", "return_id": 940, "as_of": "2026-01-07", "expected_decision": "ISOLATED", "expected_case": false},
+    {"name": "quality", "return_id": 6027, "as_of": "2026-01-31", "expected_decision": "INVESTIGATE", "expected_case": true, "expected_owner": "Quality & Sourcing"},
+    {"name": "fit", "return_id": 1068, "as_of": "2026-01-31", "expected_decision": "INVESTIGATE", "expected_case": true, "expected_owner": "Merchandising"},
+    {"name": "damage", "return_id": 3699, "as_of": "2026-01-31", "expected_decision": "INVESTIGATE", "expected_case": true, "expected_owner": "Logistics"},
+    {"name": "unavailable_record", "return_id": 999999999, "as_of": "2026-01-31", "expected_decision": "DATA_INSUFFICIENT", "expected_case": false},
+    {"name": "repeat_quality", "return_id": 6027, "as_of": "2026-01-31", "repeat": true, "expected_decision": "ATTACH_TO_CASE", "expected_case": true, "expected_owner": "Quality & Sourcing"}
+  ]
+}

@@ -46,27 +46,40 @@ def run_scripted(return_id, as_of, emit=print):
     emit({"agent": T, "type": "decision", "data": t})
 
     emit({"agent": "System", "type": "stage", "text": "Signal confirmed: opening an investigation"})
-    st, cat = t["style"], t["category"]
+    result = investigate_scripted(t['style'], t['category'], emit)
+    case = tools.store.find_open_case(t['style'], t['category'])
+    if case:
+        tools.store.link_returns(case['case_id'], [return_id])
+    return {'triage': t, **result}
+
+
+def investigate_scripted(st, cat, emit, *, case_id=None):
+    """Fixed evidence-to-policy baseline, also usable for an offline reopened case."""
+    I, R = 'Investigator Agent', 'Response Agent'
     _call(emit, I, tools.read_playbook)
     _call(emit, I, tools.style_reason_mix, style=st, days=90)
     tl = _call(emit, I, tools.weekly_timeline, style=st, category=cat, weeks=12)
     sp = _call(emit, I, tools.spread_analysis, style=st, category=cat, days=60)
-    _call(emit, I, tools.sample_returns, style=st, category=cat, limit=8)
+    samples = _call(emit, I, tools.sample_returns, style=st, category=cat, limit=8)
     fa = _call(emit, I, tools.fee_audit, style=st, category=cat)
     weeks = sum(1 for w in tl["weeks"] if w["category_returns"] > 0)
     widespread = sp["distinct_stores"] >= 5 and len(sp["by_channel"]) >= 2
     conf = "High" if widespread and weeks >= 3 else "Medium"
     cls = {"Quality": "Product quality defect", "Fit: too small": "Fit / sizing issue (runs small)",
            "Fit: too big": "Fit / sizing issue (runs big)"}.get(cat, cat)
+    owner = 'Quality & Sourcing' if cat == 'Quality' else 'Logistics' if cat == 'Damaged in transit' else 'Merchandising'
+    if cat == 'Quality' and sp['distinct_stores'] <= 2 and sp['top_store_share'] >= 0.75:
+        cls, owner, conf = 'Local handling issue (inspection required)', 'Store Operations', 'Low'
     finding = {"root_cause_class": cls, "root_cause": f"{cls} on {st}", "confidence": conf,
-               "owner_team": "Quality & Sourcing" if cat == "Quality" else "Merchandising",
+               "owner_team": owner,
                "hypotheses": [{"hypothesis": cls, "verdict": "supported", "evidence": f"{sp['total']} returns, {sp['distinct_stores']} stores, {weeks} active weeks"},
                               {"hypothesis": "Local store handling", "verdict": "ruled out" if sp["top_store_share"] < 0.5 else "inconclusive", "evidence": f"top store share {sp['top_store_share']}"}],
                "customers_charged_fees": fa.get("charged", 0)}
     emit({"agent": I, "type": "decision", "data": finding})
 
     emit({"agent": "System", "type": "stage", "text": "Acting on the findings within the playbook"})
-    c = _call(emit, R, tools.open_case, style=st, category=cat, summary=finding["root_cause"], evidence=t["rationale"])
+    evidence = f"{sp['total']} related returns; {sp['distinct_stores']} stores; sample IDs {[r['return_id'] for r in samples]}"
+    c = _call(emit, R, tools.open_case, style=st, category=cat, summary=finding["root_cause"], evidence=evidence)
     cid = c["case_id"]
     _call(emit, R, tools.record_findings, case_id=cid, root_cause=finding["root_cause"], confidence=conf,
           owner_team=finding["owner_team"], hypotheses=finding["hypotheses"])
@@ -74,11 +87,11 @@ def run_scripted(return_id, as_of, emit=print):
     if cat == "Quality":
         _call(emit, R, tools.waive_restocking_fees, case_id=cid)
         _call(emit, R, tools.request_stock_hold, case_id=cid, scope="All remaining stock in DCs and stores")
-        _call(emit, R, tools.draft_supplier_claim, case_id=cid, claim_text=f"Quality claim for {st}: {t['rationale']}")
+        _call(emit, R, tools.draft_supplier_claim, case_id=cid, claim_text=f"Quality claim for {st}: {evidence}")
         _call(emit, R, tools.request_proactive_outreach, case_id=cid, offer="Free replacement or free return")
     elif cat.startswith("Fit"):
         txt = "Runs small: we recommend ordering half a size up." if "small" in cat else "Runs large: we recommend ordering half a size down."
         _call(emit, R, tools.request_fit_guidance_update, case_id=cid, proposed_text=txt)
     _call(emit, R, tools.schedule_verification, case_id=cid, check_after_days=21)
     emit({"agent": R, "type": "briefing", "text": f"Case {cid} opened for {st} ({cat}); see actions and approvals."})
-    return {"triage": t, "finding": finding}
+    return {"finding": finding}

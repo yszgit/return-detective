@@ -38,6 +38,8 @@ def emit(e):
         print(f"{tag}    ↳ {e['output'][:220]}")
     elif t == "decision":
         print(f"{tag} ✅ {json.dumps(e['data'])[:600]}")
+    elif t in ('verification', 'usage'):
+        print(f"{tag} {t}: {json.dumps(e['data'])}")
     elif t == "briefing":
         pass
 
@@ -47,9 +49,24 @@ def main():
     p.add_argument("scenario", nargs="?", choices=list(SCENARIOS))
     p.add_argument("--return-id", type=int)
     p.add_argument("--as-of")
+    p.add_argument('--verify-case', help='check a previously scheduled case without resetting the store')
+    p.add_argument('--retry-review', action='store_true', help='retry a failed follow-up at the same date')
     p.add_argument("--scripted", action="store_true", help="fixed tool sequence, no AWS/LLM with DuckDB data")
     p.add_argument("--keep-cases", action="store_true", help="do not reset the case store first")
     a = p.parse_args()
+    if a.verify_case:
+        if not a.as_of or a.return_id or a.scenario:
+            p.error('--verify-case requires --as-of and cannot be combined with a return/scenario')
+        if not a.scripted and not os.environ.get('RD_MODEL_ID'):
+            p.error('set RD_MODEL_ID for follow-up agents, or choose --scripted')
+        try:
+            dt.date.fromisoformat(a.as_of)
+        except ValueError:
+            p.error('--as-of must be an ISO date (YYYY-MM-DD)')
+        from rd.verification import check_case
+        result = check_case(a.verify_case, a.as_of, emit, scripted=a.scripted, retry_review=a.retry_review)
+        print(json.dumps(result, indent=2, default=str))
+        return
     if bool(a.return_id) != bool(a.as_of):
         p.error("--return-id and --as-of must be supplied together")
     if a.scenario and a.return_id:

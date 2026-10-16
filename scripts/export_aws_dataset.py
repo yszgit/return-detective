@@ -46,7 +46,7 @@ def upload_plan(data_dir,manifest,prefix):
     for name,table in manifest['tables'].items():
         for file in table['files']:
             path=Path(file['path'])
-            suffix=str(path.relative_to(name)) if table['partition_columns'] else path.name
+            suffix=path.relative_to(name).as_posix() if table['partition_columns'] else path.name
             result.append((data_dir/path,f'{prefix.strip("/")}/{name}/{suffix}'))
     for meta in ['manifest.json','quality_report.json']:
         result.append((data_dir/meta,f'{prefix.strip("/")}/metadata/{meta}'))

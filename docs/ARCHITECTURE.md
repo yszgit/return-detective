@@ -11,9 +11,14 @@ flowchart TD
     Tools --> Data[rd/data.py]
     Data --> Local[DuckDB over local Parquet]
     Data --> AWS[Private S3 + Glue + Athena]
-    Tools --> Store[Local JSON cases / actions / approvals]
+    Tools --> Store[Local JSON or DynamoDB cases / actions / approvals]
     UI --> Human[Demo approval decision]
     Human --> Store
+    UI --> Verify[Due-date verification]
+    CLI --> Verify
+    Verify --> Data
+    Verify -->|Signal persists: reuse case and prior hypotheses| Pipeline
+    Verify -->|Observed normal signal with sufficient coverage| Closed[Close case]
 ```
 
 `rd/agents/` contains the three agents. Each role owns its prompt and construction in `triage.py`, `investigator.py` or `response.py`. `shared.py` contains Bedrock configuration, trace hooks and complete JSON result parsing; `pipeline.py` coordinates the existing sequential flow. These remain separate Agent instances within one application process. The package exports preserve `from rd.agents import run_pipeline` and the AWS checker's `_model` import.
@@ -28,13 +33,15 @@ The shared configuration and scenarios now live in `rd/config.py` and `rd/scenar
 - An isolated return and negative control stay below systemic signal thresholds.
 - Tool authority checks and human approval requests run without AWS.
 - The CLI offers `--scripted`; the UI identifies this mode as having no LLM.
+- Dated checks preserve cases, reject missing/sparse follow-up, reopen persistent signals and close observed normal signals. The prepared quality replay exercises both outcomes in isolated storage.
+- `evaluation/compare_agents.py` compares the same six seeded cases using fixed tools or real Bedrock agents. SDK usage is captured when supplied; live-agent results require an actual live run.
 - The early starter's simulation and tests remain runnable in `legacy/starter/`.
 
 ## Prototype boundaries
 
 - Live Bedrock and Athena adapters exist; this reorganization does not verify account access or model behavior.
-- All action tools record demo actions/requests in JSON. No real refund, stock hold, supplier message, customer outreach or timed follow-up is executed.
-- DynamoDB, SNS and live retail adapters are future work. Approval identity is not authenticated; a local JSON lock is not a multi-process database.
+- Business actions are demo records in the selected store. No real refund, stock hold, supplier message or customer outreach is executed. Follow-up checks run when triggered from the UI/CLI; no background cloud scheduler is deployed.
+- The optional DynamoDB adapter persists demo records but reads and rewrites a namespace without cross-table transactions. SNS and live retail adapters remain future work. Approval identity is not authenticated; neither backend is a multi-user production workflow.
 - The replay date and data cache are process-global. Isolate runs; concurrent production users need request-scoped state.
 - Official v2 uses strictly prior-day baselines and date-bounded return/exchange/transaction lookups. Undated fees, flags, final statuses and shipped quantities remain snapshot facts, not historical features; population return rates and unverified financial execution are unavailable. Legacy synthetic/v1 keeps its compatibility baseline.
 - The optional Bedrock Guardrail is active only when configured. Tool outputs omit customer identifiers but can retain private business IDs.

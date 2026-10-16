@@ -13,6 +13,7 @@ import queue
 import re
 import threading
 import time
+import datetime as dt
 
 import pandas as pd
 import streamlit as st
@@ -339,6 +340,14 @@ def render_event(e, box):
             st.markdown(f'<div class="rd-agent"><span class="n">{num}</span>'
                         f'<span class="t">Briefing for the owner team</span></div>', unsafe_allow_html=True)
             st.markdown(clean(e["text"]))
+        elif kind == 'verification':
+            d = e['data']
+            st.info(f"Verification: {d['outcome'].replace('_', ' ')} · {d['as_of']}")
+            st.caption('Observed change in the signal; causal savings have not been established.')
+        elif kind == 'usage':
+            d = e['data']
+            st.caption(f"{short}: {d['seconds']}s · input tokens {d.get('input_tokens', 'unknown')} · "
+                       f"output tokens {d.get('output_tokens', 'unknown')}")
 
 
 def pair_tool_calls(events):
@@ -360,7 +369,8 @@ def trace_path(key):
 
 
 def run_live(sc, box, scripted=False):
-    store.reset()
+    if store.STORE_BACKEND == 'json':
+        store.reset()
     q, events, err = queue.Queue(), [], []
 
     def worker():
@@ -409,7 +419,10 @@ def run_live(sc, box, scripted=False):
 def replay(sc, box, speed=0.35):
     with open(trace_path(sc["key"]), encoding="utf-8") as f:
         saved = json.load(f)
-    store.restore(saved["store"])
+    if store.STORE_BACKEND == 'json':
+        store.restore(saved["store"])
+    else:
+        box.caption('Saved trace playback; current DynamoDB cases are preserved.')
     evs = pair_tool_calls(saved["events"])
     for e in evs:
         render_event(e, box)
@@ -469,6 +482,72 @@ def case_panel():
         if c.get("hypotheses"):
             with st.expander("Hypotheses tested"):
                 st.dataframe(pd.DataFrame(c["hypotheses"]), hide_index=True, width="stretch")
+        verification_panel(c)
+
+
+def verification_panel(case):
+    planned = case.get('verification') or {}
+    if not planned.get('due_on'):
+        if case['status'] != 'CLOSED' and st.button('Schedule follow-up', key='vfschedule'+case['case_id']):
+            from rd.verification import schedule
+            schedule(case['case_id'], case['opened_as_of'])
+            st.rerun()
+        return
+    cid = case['case_id']
+    with st.expander('Verify outcome and continue investigation', expanded=False):
+        st.caption(f"Due: {planned['due_on']} · {planned['status'].replace('_', ' ')}")
+        st.caption('Run a dated check against the supplied data. Follow-up actions remain simulated.')
+        chosen = st.date_input('Observation date', value=dt.date.fromisoformat(planned['due_on']), key='vfdate'+cid)
+        follow_mode = st.radio('Follow-up mode', ['Scripted (no LLM)', 'Live (Bedrock)'], key='vfmode'+cid)
+        live = follow_mode == 'Live (Bedrock)'
+        retry = bool(case.get('review_error_as_of'))
+        if retry:
+            st.warning('The last follow-up failed. Resolve any new approvals, then retry this date.')
+        if st.button('Check outcome' if not retry else 'Retry follow-up', key='vfgo'+cid,
+                     disabled=case['status'] == 'CLOSED' or (live and not os.environ.get('RD_MODEL_ID'))):
+            from rd.verification import check_case
+            events = []
+            try:
+                with st.spinner('Checking observations and reviewing any persistent signal...'):
+                    result = check_case(cid, chosen.isoformat(), events.append, scripted=not live, retry_review=retry)
+                st.session_state['vfresult'+cid] = result
+                st.session_state.events.extend(events)
+                st.rerun()
+            except Exception as exc:
+                st.error(f'Follow-up failed: {exc}')
+        result = st.session_state.get('vfresult'+cid)
+        if result:
+            st.write(result['outcome'].replace('_', ' '))
+            if result.get('message'):
+                st.caption(result['message'])
+        if case.get('verification_checks'):
+            st.json(case['verification_checks'][-1])
+
+
+def agent_evaluation_panel():
+    from rd.config import RUNTIME_DIR
+    root = RUNTIME_DIR / 'evaluation' / 'agent_comparison'
+    st.subheader('Rules and agents on the same cases')
+    st.caption('Seeded synthetic acceptance checks. Explanation quality requires human review; these are not real-world accuracy or savings estimates.')
+    reports = []
+    for mode in ('rules', 'agent'):
+        path = root / mode / 'summary.json'
+        if path.is_file():
+            reports.append(json.loads(path.read_text(encoding='utf-8')))
+    if not reports:
+        st.info('Generate the fixed-tool baseline: python evaluation/compare_agents.py --mode rules')
+        st.caption('Then run the same cases with --mode agent --allow-model-calls from your configured Workshop terminal.')
+        return
+    if len(reports) == 2 and reports[0]['dataset_sha256'] != reports[1]['dataset_sha256']:
+        st.warning('These runs used different data snapshots and must not be treated as a paired comparison.')
+    if len(reports) == 2 and {r['name'] for r in reports[0]['results']} != {r['name'] for r in reports[1]['results']}:
+        st.warning('These runs cover different cases. Compare matching case rows, not their aggregate pass rates.')
+    for report in reports:
+        st.markdown('**Fixed tools and playbook**' if report['mode'] == 'rules' else '**Bedrock agents**')
+        st.caption(f"Acceptance checks passed: {report['passed']} / {report['cases']}")
+        st.dataframe(pd.DataFrame(report['results']), hide_index=True, width='stretch')
+    if not any(r['mode'] == 'agent' for r in reports):
+        st.info('No live-agent benchmark has been recorded yet. The rules result alone does not establish Agent improvement.')
 
 
 # ------------------------------------------------------------------ impact tab
@@ -580,7 +659,8 @@ def architecture_tab():
     st.markdown('<div class="rd-h" style="margin-top:0">Built on AWS</div>'
                 '<div class="rd-h-sub">Services and their role in Return Detective</div>', unsafe_allow_html=True)
     st.caption("Retail actions, notifications and verification schedules are local simulations. No production retail system is connected.")
-    st.markdown("""
+    case_storage = "Amazon DynamoDB" if store.STORE_BACKEND == "dynamodb" else "Local JSON"
+    st.markdown(f"""
 | Layer | AWS service | Role in Return Detective |
 |---|---|---|
 | Data | **DuckDB** locally; **Amazon S3 + Glue + Athena** adapter | Query the configured prepared dataset with SQL |
@@ -588,8 +668,9 @@ def architecture_tab():
 | Agent framework | **Strands Agents SDK** | Tool use, multi-agent pipeline, hooks for the live trace |
 | Policy | Playbook document read by the agents | Root-cause classes, confidence levels, authority matrix |
 | Guardrails | Tool authority checks; optional Bedrock Guardrail | Prototype fee authority and approvals for stock holds, claims and outreach |
-| Case memory | **Local JSON**; DynamoDB planned | Cases, simulated actions, approval queue and audit trail |
+| Case memory | **{case_storage}** | Cases, simulated actions, approval queue and audit trail |
 | Notifications | **Local simulation**; SNS planned | Record owner notifications and approval proposals |
+| Verification | Due dates and checks triggered from UI/CLI | Reopen persistent signals; give prior evidence to Investigator; close observed normal cases |
 | Build | **Kiro** | AI IDE used to build the prototype |
 """)
     st.markdown('<div class="rd-h">Where the expensive model runs</div>'
@@ -621,7 +702,7 @@ with st.sidebar:
     st.caption("Synthetic data" if SYNTHETIC else "Authorized ALDO data")
     if not data_available():
         st.markdown(_notice("Generate local demo data: python scripts/generate_synthetic_data.py", "plain"), unsafe_allow_html=True)
-    st.caption("Actions update the local demo store; no retail system is connected.")
+    st.caption("Actions are simulated; no retail system is connected.")
     st.header("Scenario")
     if st.session_state.scenario not in SCENARIOS:
         st.session_state.scenario = list(SCENARIOS)[0]
@@ -652,7 +733,7 @@ with st.sidebar:
         st.session_state.events = []
         st.rerun()
 
-tab1, tab2, tab3 = st.tabs(["Live investigation", "Business impact", "AWS architecture"])
+tab1, tab2, tab3, tab4 = st.tabs(["Live investigation", "Business impact", "AWS architecture", "Agent evaluation"])
 with tab1:
     left, right = st.columns([1.55, 1], gap="large")
     with left:
@@ -680,3 +761,5 @@ with tab2:
     impact_tab()
 with tab3:
     architecture_tab()
+with tab4:
+    agent_evaluation_panel()

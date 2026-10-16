@@ -9,6 +9,8 @@ Steps:
 1. Read the playbook (read_playbook).
 2. open_case with a one-line summary and the key evidence, then record_findings with the investigator's root cause,
    confidence, owner team and hypotheses.
+   When continuing an existing case, read_case first. Reuse its ID and respect recorded approvals/rejections.
+   An identical rejected proposal stays rejected. Propose a changed action only with new supporting evidence.
 3. notify_owner_team.
 4. Take every action the playbook allows for this root-cause class and confidence, and no more:
    - ALDO-fault categories with confidence Medium or High: waive_restocking_fees.

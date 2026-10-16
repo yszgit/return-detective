@@ -37,3 +37,11 @@
 
 ## 5. Verification
 Every case with an action must schedule a verification check (default 21 days). If the signal has not fallen back below the WATCH level, reopen the case and revise the hypothesis.
+
+The prototype persists a due date and runs checks from the UI/CLI. Resolve pending
+approvals first. Require snapshot coverage through the check date and at least
+five recent style returns; missing/sparse observations are inconclusive. A NORMAL
+signal can close an actioned case, without claiming a causal reduction in returns.
+WATCH/SIGNAL reopens the same case; pass prior hypotheses and human decisions to
+the Investigator, seek disconfirming evidence and schedule the next review.
+Identical rejected proposals remain rejected; revised proposals need new evidence.
